@@ -1,18 +1,88 @@
 /**
- * Welcome to Cloudflare Workers! This is your first worker.
+ * Meeting Minds Group - RAG Chatbot API
  *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your worker in action
- * - Run `npm run deploy` to publish your worker
- *
- * Bind resources to your worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/workers/
+ * Endpoints:
+ *   POST /chat         - Send a message and get AI response
+ *   POST /chat/stream  - Streaming chat response
+ *   POST /ingest       - Add content to knowledge base
+ *   POST /ingest/bulk  - Bulk add multiple documents
+ *   GET  /stats        - Get vector store statistics
+ *   GET  /health       - Health check
+ *   GET  /widget.js    - Embeddable chat widget
  */
 
+import type { Env } from './types';
+import { handleChat, handleChatStream } from './routes/chat';
+import { handleIngest, handleBulkIngest, handleStats } from './routes/ingest';
+import { handleWidget } from './routes/widget';
+import { handleCors, addCorsHeaders } from './utils/cors';
+
 export default {
-	async fetch(request, env, ctx): Promise<Response> {
-		return new Response('Hello World!');
-	},
+  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+    const path = url.pathname;
+    const allowedOrigin = env.ALLOWED_ORIGIN || 'https://meetingmindsgroup.com';
+
+    // Handle CORS preflight
+    const corsResponse = handleCors(request, allowedOrigin);
+    if (corsResponse) {
+      return corsResponse;
+    }
+
+    let response: Response;
+
+    try {
+      // Route handling
+      switch (true) {
+        // Health check
+        case path === '/' || path === '/health':
+          response = Response.json({ status: 'ok', service: 'mmgroup-chat' });
+          break;
+
+        // Chat endpoints
+        case path === '/chat' && request.method === 'POST':
+          response = await handleChat(request, env);
+          break;
+
+        case path === '/chat/stream' && request.method === 'POST':
+          response = await handleChatStream(request, env);
+          break;
+
+        // Ingest endpoints
+        case path === '/ingest' && request.method === 'POST':
+          response = await handleIngest(request, env);
+          break;
+
+        case path === '/ingest/bulk' && request.method === 'POST':
+          response = await handleBulkIngest(request, env);
+          break;
+
+        // Stats endpoint
+        case path === '/stats' && request.method === 'GET':
+          response = await handleStats(request, env);
+          break;
+
+        // Widget endpoint
+        case path === '/widget.js' && request.method === 'GET':
+          response = handleWidget(request, allowedOrigin);
+          break;
+
+        // 404 for unknown routes
+        default:
+          response = Response.json(
+            { error: 'Not found', path },
+            { status: 404 }
+          );
+      }
+    } catch (error) {
+      console.error('Unhandled error:', error);
+      response = Response.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
+    }
+
+    // Add CORS headers to all responses
+    return addCorsHeaders(response, request, allowedOrigin);
+  },
 } satisfies ExportedHandler<Env>;

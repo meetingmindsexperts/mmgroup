@@ -1,7 +1,3 @@
-/**
- * For more details on how to configure Wrangler, refer to:
- * https://developers.cloudflare.com/workers/wrangler/configuration/
- */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "mmgroup",
@@ -9,33 +5,54 @@
 	"compatibility_date": "2025-09-27",
 	"observability": {
 		"enabled": true
-	}
+	},
 	/**
-	 * Smart Placement
-	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
-	 */
-	// "placement": {  "mode": "smart" }
+   * Environment Variables
+   * VECTOR_STORE: "kv" (free) or "vectorize" (paid)
+   * LLM_PROVIDER: "openai" or "workers-ai"
+   * EMBEDDING_PROVIDER: "openai" or "workers-ai"
+   */
+	"vars": {
+		"VECTOR_STORE": "kv",
+		"LLM_PROVIDER": "openai",
+		"EMBEDDING_PROVIDER": "openai",
+		"ALLOWED_ORIGIN": "https://meetingmindsgroup.com"
+	},
 	/**
-	 * Bindings
-	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
-	 * databases, object storage, AI inference, real-time communication and more.
-	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
-	 */
+   * KV Namespace for vector storage (free tier)
+   * Create with: wrangler kv namespace create VECTORS_KV
+   */
+	"kv_namespaces": [
+		{
+			"binding": "VECTORS_KV",
+			"id": "5c5a1ea13b8f4df2ac575091fc09bdf3"
+		}
+	]
 	/**
-	 * Environment Variables
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-	 * Note: Use secrets to store sensitive data.
-	 * https://developers.cloudflare.com/workers/configuration/secrets/
-	 */
-	// "vars": {  "MY_VARIABLE": "production_value" }
+   * D1 Database for chat history (optional - not used yet)
+   * Create with: wrangler d1 create mmgroup-chat-db
+   */
+	// "d1_databases": [
+	// 	{
+	// 		"binding": "CHAT_DB",
+	// 		"database_name": "mmgroup-chat-db",
+	// 		"database_id": "YOUR_D1_DATABASE_ID"
+	// 	}
+	// ]
 	/**
-	 * Static Assets
-	 * https://developers.cloudflare.com/workers/static-assets/binding/
-	 */
-	// "assets": {  "directory": "./public/",  "binding": "ASSETS" }
+   * Vectorize (uncomment when upgrading to paid plan)
+   * Create with: wrangler vectorize create mmgroup-vectors --dimensions=1536 --metric=cosine
+   */
+	// "vectorize": [
+	//   {
+	//     "binding": "VECTORS_INDEX",
+	//     "index_name": "mmgroup-vectors"
+	//   }
+	// ]
 	/**
-	 * Service Bindings (communicate between multiple Workers)
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
-	 */
-	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+   * Workers AI (uncomment when using workers-ai provider)
+   */
+	// "ai": {
+	//   "binding": "AI"
+	// }
 }
