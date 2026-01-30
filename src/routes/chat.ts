@@ -5,7 +5,8 @@ import { createLLMProvider } from '../providers/llm';
 import { createVectorStoreProvider } from '../providers/vectorstore';
 import { logChat } from './analytics';
 
-// Contact query detection - runs BEFORE LLM for reliable responses
+// Contact query detection - instant response for static contact info only
+// All other queries go through RAG + AI pipeline
 const CONTACT_PATTERNS = [
   /\bcontact\b/i,
   /\bget\s*in\s*touch\b/i,
@@ -59,7 +60,8 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
 
     const sessionId = body.sessionId || crypto.randomUUID();
 
-    // Quick response for contact queries - no LLM needed
+    // Instant response for contact queries only (static info)
+    // All other queries go through RAG + AI
     if (isContactQuery(userMessage)) {
       const responseTime = Date.now() - startTime;
       logChat(env, {
