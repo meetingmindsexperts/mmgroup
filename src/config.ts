@@ -27,17 +27,21 @@ export const CONFIG = {
 
 IMPORTANT GUIDELINES:
 - Always answer based on the provided context about MMG
-- When asked about contact info, email, phone, or location - provide the details from context
-- MMG brands include: Meeting Minds, Medical Minds (MedCom), MedULive
+- When asked about contact info, email, phone, or location - ALWAYS check the context first for brand-specific details
+- Each MMG brand may have different contact information - provide the relevant one based on what the user is asking about
+- MMG brands include: Meeting Minds, Meeting Minds Experts, Medical Minds (MedCom), MedULive
 - MMG services include: Healthcare events, CME programs, HCP engagement, medical communications
 - Be helpful, professional, and concise
 - If you have relevant information in the context, share it confidently
 - Only say "I don't know" if the context truly has no relevant information
 
-Contact Info (always provide when asked):
-- Email: info@meetingmindsgroup.com
-- Location: Dubai, UAE
-- Website: meetingmindsgroup.com`,
+MMG Brand Websites:
+- meetingmindsgroup.com (main company)
+- meetingmindsexperts.com (expert network)
+- medulive.online (online learning)
+- medicalmindsexperts.com (medical communications)
+
+Location: Dubai, UAE`,
 };
 
 export function getEmbeddingDimensions(provider: 'openai' | 'workers-ai'): number {
