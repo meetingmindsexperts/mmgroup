@@ -5,6 +5,38 @@ import { createLLMProvider } from '../providers/llm';
 import { createVectorStoreProvider } from '../providers/vectorstore';
 import { logChat } from './analytics';
 
+// Contact query detection - runs BEFORE LLM for reliable responses
+const CONTACT_PATTERNS = [
+  /\bcontact\b/i,
+  /\bget\s*in\s*touch\b/i,
+  /\breach\s*(out|you)\b/i,
+  /\bemail\b/i,
+  /\bphone\s*(number)?\b/i,
+  /\bcall\s*(you|us)?\b/i,
+  /\baddress\b/i,
+  /\blocation\b/i,
+  /\bwhere\s*(are\s*)?you\s*(located)?\b/i,
+  /\bhow\s*(can|do)\s*i\s*(contact|reach|connect)\b/i,
+  /\bspeak\s*(to|with)\s*(someone|sales|team)\b/i,
+  /\btalk\s*to\s*(sales|someone|team)\b/i,
+];
+
+const CONTACT_RESPONSE = `You can reach Meeting Minds Group through:
+
+**Address:** 508 & 509, DSC Tower, Dubai Studio City, Dubai, UAE
+
+**Websites:**
+- Main: meetingmindsgroup.com
+- Experts: meetingmindsexperts.com
+- MedCom: medicalmindsexperts.com
+- Online Learning: medulive.online
+
+Feel free to visit our websites or reach out through the contact forms available on each site.`;
+
+function isContactQuery(message: string): boolean {
+  return CONTACT_PATTERNS.some((pattern) => pattern.test(message));
+}
+
 export async function handleChat(request: Request, env: Env): Promise<Response> {
   const startTime = Date.now();
 
@@ -25,13 +57,31 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
       return Response.json({ error: 'Message too long (max 2000 characters)' }, { status: 400 });
     }
 
+    const sessionId = body.sessionId || crypto.randomUUID();
+
+    // Quick response for contact queries - no LLM needed
+    if (isContactQuery(userMessage)) {
+      const responseTime = Date.now() - startTime;
+      logChat(env, {
+        session_id: sessionId,
+        message: userMessage,
+        response: CONTACT_RESPONSE,
+        response_time_ms: responseTime,
+        context_chunks: 0,
+        origin: request.headers.get('origin'),
+        user_agent: request.headers.get('user-agent'),
+      });
+
+      return Response.json({
+        response: CONTACT_RESPONSE,
+        sessionId,
+      } as ChatResponse);
+    }
+
     // Initialize providers
     const embeddings = createEmbeddingsProvider(env);
     const llm = createLLMProvider(env);
     const vectorStore = createVectorStoreProvider(env);
-
-    // Generate session ID if not provided
-    const sessionId = body.sessionId || crypto.randomUUID();
 
     // Step 1: Embed the user's query
     const queryEmbedding = await embeddings.embed(userMessage);
