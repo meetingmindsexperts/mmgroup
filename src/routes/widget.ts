@@ -35,6 +35,18 @@ function generateWidgetJs(
 
   let isOpen = false;
   let sessionId = localStorage.getItem('mm_chat_session') || null;
+  let chatHistory = JSON.parse(localStorage.getItem('mm_chat_history') || '[]');
+
+  function saveChatHistory() {
+    localStorage.setItem('mm_chat_history', JSON.stringify(chatHistory));
+  }
+
+  function clearChatHistory() {
+    chatHistory = [];
+    localStorage.removeItem('mm_chat_history');
+    localStorage.removeItem('mm_chat_session');
+    sessionId = null;
+  }
 
   // Format message with clickable links and markdown
   function formatMessage(text) {
@@ -140,6 +152,23 @@ function generateWidgetJs(
       transition: opacity 0.2s;
     }
     .mm-chat-close:hover { opacity: 1; }
+    .mm-chat-header-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .mm-chat-new {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      cursor: pointer;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      opacity: 0.9;
+      transition: opacity 0.2s, background 0.2s;
+    }
+    .mm-chat-new:hover { opacity: 1; background: rgba(255,255,255,0.3); }
     .mm-chat-messages {
       flex: 1;
       overflow-y: auto;
@@ -279,7 +308,10 @@ function generateWidgetJs(
       <div class="mm-chat-container">
         <div class="mm-chat-header">
           <span>\${WIDGET_TITLE}</span>
-          <button class="mm-chat-close" aria-label="Close chat">\${closeIcon}</button>
+          <div class="mm-chat-header-actions">
+            <button class="mm-chat-new" aria-label="New chat">New Chat</button>
+            <button class="mm-chat-close" aria-label="Close chat">\${closeIcon}</button>
+          </div>
         </div>
         <div class="mm-chat-messages">
           <div class="mm-chat-welcome">
@@ -298,6 +330,7 @@ function generateWidgetJs(
     const bubble = widget.querySelector('.mm-chat-bubble');
     const container = widget.querySelector('.mm-chat-container');
     const closeBtn = widget.querySelector('.mm-chat-close');
+    const newChatBtn = widget.querySelector('.mm-chat-new');
     const messagesEl = widget.querySelector('.mm-chat-messages');
     const input = widget.querySelector('.mm-chat-input');
     const sendBtn = widget.querySelector('.mm-chat-send');
@@ -353,7 +386,7 @@ function generateWidgetJs(
       input.focus();
     }
 
-    function addMessage(role, content, format = true) {
+    function addMessage(role, content, format = true, save = true) {
       const messageEl = document.createElement('div');
       messageEl.className = 'mm-chat-message ' + role;
 
@@ -365,14 +398,42 @@ function generateWidgetJs(
 
       messagesEl.appendChild(messageEl);
       scrollToBottom();
+
+      // Save to history
+      if (save) {
+        chatHistory.push({ role, content });
+        saveChatHistory();
+      }
+    }
+
+    function loadChatHistory() {
+      if (chatHistory.length > 0) {
+        const welcome = messagesEl.querySelector('.mm-chat-welcome');
+        if (welcome) welcome.remove();
+
+        chatHistory.forEach(msg => {
+          addMessage(msg.role, msg.content, msg.role === 'assistant', false);
+        });
+      }
     }
 
     function scrollToBottom() {
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    function startNewChat() {
+      clearChatHistory();
+      messagesEl.innerHTML = \`
+        <div class="mm-chat-welcome">
+          <h3>Welcome! 👋</h3>
+          <p>How can we help you today?</p>
+        </div>
+      \`;
+    }
+
     bubble.addEventListener('click', toggleChat);
     closeBtn.addEventListener('click', toggleChat);
+    newChatBtn.addEventListener('click', startNewChat);
     sendBtn.addEventListener('click', sendMessage);
     input.addEventListener('keypress', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -380,6 +441,9 @@ function generateWidgetJs(
         sendMessage();
       }
     });
+
+    // Load chat history on init
+    loadChatHistory();
   }
 
   if (document.readyState === 'loading') {
