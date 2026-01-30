@@ -133,3 +133,23 @@ export async function handleStats(request: Request, env: Env): Promise<Response>
     return Response.json({ error: 'Failed to get stats' }, { status: 500 });
   }
 }
+
+// Clear all vectors from the store
+export async function handleClear(request: Request, env: Env): Promise<Response> {
+  try {
+    const vectorStore = createVectorStoreProvider(env);
+    const stats = await vectorStore.stats();
+    const countBefore = stats.count;
+
+    await vectorStore.clear();
+
+    return Response.json({
+      success: true,
+      message: `Cleared ${countBefore} vectors from store`,
+      clearedCount: countBefore,
+    });
+  } catch (error) {
+    console.error('Clear error:', error);
+    return Response.json({ error: 'Failed to clear vectors' }, { status: 500 });
+  }
+}

@@ -95,6 +95,20 @@ export class KVVectorStore implements VectorStoreProvider {
     return { count: index.length };
   }
 
+  async clear(): Promise<void> {
+    const index = await this.getIndex();
+
+    // Delete all vectors in batches
+    const batchSize = 50;
+    for (let i = 0; i < index.length; i += batchSize) {
+      const batch = index.slice(i, i + batchSize);
+      await Promise.all(batch.map((id) => this.kv.delete(`${VECTORS_PREFIX}${id}`)));
+    }
+
+    // Clear the index
+    await this.kv.delete(VECTORS_KEY);
+  }
+
   private async getIndex(): Promise<string[]> {
     const index = await this.kv.get(VECTORS_KEY);
     return index ? (JSON.parse(index) as string[]) : [];

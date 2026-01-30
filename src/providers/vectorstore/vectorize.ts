@@ -63,6 +63,12 @@ export class VectorizeStore implements VectorStoreProvider {
 
   async stats(): Promise<{ count: number }> {
     const described = await this.index.describe();
-    return { count: described.vectorCount };
+    return { count: described.vectorsCount };
+  }
+
+  async clear(): Promise<void> {
+    // Vectorize doesn't have a bulk delete, so this is a no-op for now
+    // Would need to iterate through all vectors and delete them individually
+    throw new Error('Clear not implemented for Vectorize. Please recreate the index.');
   }
 }

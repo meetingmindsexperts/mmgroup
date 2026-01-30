@@ -27,4 +27,9 @@ export interface VectorStoreProvider {
    * Get stats about the vector store
    */
   stats(): Promise<{ count: number }>;
+
+  /**
+   * Clear all vectors from the store
+   */
+  clear(): Promise<void>;
 }
