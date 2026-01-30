@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(npm run deploy:*)",
-      "Bash(API_URL=https://mmgroup.krishna-94f.workers.dev npm run scrape:*)"
+      "Bash(API_URL=https://mmgroup.krishna-94f.workers.dev npm run scrape:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npm run scrape:*)",
+      "Bash(wrangler d1 create:*)",
+      "Bash(npx wrangler:*)"
     ]
   }
 }
