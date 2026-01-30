@@ -39,8 +39,9 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
     const searchResults = await vectorStore.search(queryEmbedding, CONFIG.rag.topK);
 
     // Step 3: Build the context from search results
+    // Lower threshold to 0.1 to include more potentially relevant content
     const context = searchResults
-      .filter((r) => r.score > 0.3) // Only use relevant results
+      .filter((r) => r.score > 0.1)
       .map((r) => r.content)
       .join('\n\n---\n\n');
 
