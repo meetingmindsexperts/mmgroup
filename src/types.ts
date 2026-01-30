@@ -43,8 +43,8 @@ export interface Env {
   // KV for vector storage (free tier)
   VECTORS_KV: KVNamespace;
 
-  // D1 for chat history (optional - for future use)
-  CHAT_DB?: D1Database;
+  // D1 for chat analytics
+  ANALYTICS_DB: D1Database;
 
   // Vectorize (when upgrading)
   VECTORS_INDEX?: VectorizeIndex;

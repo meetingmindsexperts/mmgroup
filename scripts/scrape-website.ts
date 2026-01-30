@@ -1,21 +1,56 @@
 /**
  * Website Scraper for RAG Ingestion
  *
+ * Scrapes multiple MMG brand websites and ingests content into the vector store.
+ *
  * Usage:
- *   npx tsx scripts/scrape-website.ts
+ *   npm run scrape                    # Scrape all configured websites
+ *   npm run scrape -- --site=mmg      # Scrape only meetingmindsgroup.com
+ *   npm run scrape -- --site=experts  # Scrape only meetingmindsexperts.com
+ *   npm run scrape -- --site=medulive # Scrape only medulive.online
+ *   npm run scrape -- --site=medcom   # Scrape only medicalmindsexperts.com
  *
  * Environment variables:
- *   API_URL - The worker URL (default: http://localhost:8787)
- *   WEBSITE_URL - The website to scrape (default: https://meetingmindsgroup.com)
+ *   API_URL - The worker URL (default: https://mmgroup.krishna-94f.workers.dev)
  */
 
-const API_URL = process.env.API_URL || 'http://localhost:8787';
-const WEBSITE_URL = process.env.WEBSITE_URL || 'https://meetingmindsgroup.com';
+const API_URL = process.env.API_URL || 'https://mmgroup.krishna-94f.workers.dev';
+
+// MMG Brand Websites Configuration
+const WEBSITES = {
+  mmg: {
+    name: 'Meeting Minds Group',
+    url: 'https://meetingmindsgroup.com',
+    brand: 'Meeting Minds',
+    maxPages: 50,
+  },
+  experts: {
+    name: 'Meeting Minds Experts',
+    url: 'https://meetingmindsexperts.com',
+    brand: 'Meeting Minds Experts',
+    maxPages: 50,
+  },
+  medulive: {
+    name: 'MedULive',
+    url: 'https://medulive.online',
+    brand: 'MedULive',
+    maxPages: 50,
+  },
+  medcom: {
+    name: 'Medical Minds Experts',
+    url: 'https://medicalmindsexperts.com',
+    brand: 'Medical Minds (MedCom)',
+    maxPages: 50,
+  },
+} as const;
+
+type SiteKey = keyof typeof WEBSITES;
 
 interface Page {
   url: string;
   title: string;
   content: string;
+  brand: string;
 }
 
 // Simple HTML to text extraction
@@ -65,8 +100,12 @@ function extractLinks(html: string, baseUrl: string): string[] {
     let href = match[1];
 
     // Skip anchors, javascript, mailto, etc.
-    if (href.startsWith('#') || href.startsWith('javascript:') ||
-        href.startsWith('mailto:') || href.startsWith('tel:')) {
+    if (
+      href.startsWith('#') ||
+      href.startsWith('javascript:') ||
+      href.startsWith('mailto:') ||
+      href.startsWith('tel:')
+    ) {
       continue;
     }
 
@@ -78,12 +117,16 @@ function extractLinks(html: string, baseUrl: string): string[] {
     }
 
     // Only include links from the same domain
-    const url = new URL(href);
-    const base = new URL(baseUrl);
-    if (url.hostname === base.hostname) {
-      // Remove hash and query params for deduplication
-      url.hash = '';
-      links.push(url.href);
+    try {
+      const url = new URL(href);
+      const base = new URL(baseUrl);
+      if (url.hostname === base.hostname) {
+        // Remove hash and query params for deduplication
+        url.hash = '';
+        links.push(url.href);
+      }
+    } catch {
+      // Invalid URL, skip
     }
   }
 
@@ -91,9 +134,9 @@ function extractLinks(html: string, baseUrl: string): string[] {
 }
 
 // Fetch a page
-async function fetchPage(url: string): Promise<Page | null> {
+async function fetchPage(url: string, brand: string): Promise<Page | null> {
   try {
-    console.log(`Fetching: ${url}`);
+    console.log(`  Fetching: ${url}`);
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'MMGroup-Scraper/1.0 (Content Ingestion Bot)',
@@ -101,13 +144,13 @@ async function fetchPage(url: string): Promise<Page | null> {
     });
 
     if (!response.ok) {
-      console.error(`  Failed: ${response.status}`);
+      console.error(`    Failed: ${response.status}`);
       return null;
     }
 
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.includes('text/html')) {
-      console.log(`  Skipped: Not HTML (${contentType})`);
+      console.log(`    Skipped: Not HTML (${contentType})`);
       return null;
     }
 
@@ -117,20 +160,24 @@ async function fetchPage(url: string): Promise<Page | null> {
 
     // Skip pages with very little content
     if (content.length < 100) {
-      console.log(`  Skipped: Too little content (${content.length} chars)`);
+      console.log(`    Skipped: Too little content (${content.length} chars)`);
       return null;
     }
 
-    console.log(`  Success: "${title}" (${content.length} chars)`);
-    return { url, title, content };
+    console.log(`    Success: "${title}" (${content.length} chars)`);
+    return { url, title, content, brand };
   } catch (error) {
-    console.error(`  Error: ${error}`);
+    console.error(`    Error: ${error}`);
     return null;
   }
 }
 
-// Crawl website
-async function crawlWebsite(startUrl: string, maxPages: number = 50): Promise<Page[]> {
+// Crawl a single website
+async function crawlWebsite(
+  startUrl: string,
+  brand: string,
+  maxPages: number = 50
+): Promise<Page[]> {
   const visited = new Set<string>();
   const toVisit = [startUrl];
   const pages: Page[] = [];
@@ -143,20 +190,24 @@ async function crawlWebsite(startUrl: string, maxPages: number = 50): Promise<Pa
     if (visited.has(normalized)) continue;
     visited.add(normalized);
 
-    const page = await fetchPage(normalized);
+    const page = await fetchPage(normalized, brand);
     if (page) {
       pages.push(page);
 
-      // Fetch HTML again to extract links (we could optimize this)
-      const response = await fetch(normalized);
-      const html = await response.text();
-      const links = extractLinks(html, startUrl);
+      // Fetch HTML again to extract links
+      try {
+        const response = await fetch(normalized);
+        const html = await response.text();
+        const links = extractLinks(html, startUrl);
 
-      for (const link of links) {
-        const linkNormalized = link.split('?')[0].split('#')[0];
-        if (!visited.has(linkNormalized) && !toVisit.includes(linkNormalized)) {
-          toVisit.push(linkNormalized);
+        for (const link of links) {
+          const linkNormalized = link.split('?')[0].split('#')[0];
+          if (!visited.has(linkNormalized) && !toVisit.includes(linkNormalized)) {
+            toVisit.push(linkNormalized);
+          }
         }
+      } catch {
+        // Failed to fetch links, continue
       }
     }
 
@@ -176,6 +227,7 @@ async function ingestPages(pages: Page[]): Promise<void> {
     metadata: {
       url: page.url,
       title: page.title,
+      brand: page.brand,
       type: 'webpage' as const,
     },
   }));
@@ -200,31 +252,84 @@ async function ingestPages(pages: Page[]): Promise<void> {
   }
 }
 
+// Parse command line arguments
+function parseArgs(): SiteKey[] {
+  const args = process.argv.slice(2);
+  const siteArg = args.find((arg) => arg.startsWith('--site='));
+
+  if (siteArg) {
+    const site = siteArg.split('=')[1] as SiteKey;
+    if (site in WEBSITES) {
+      return [site];
+    }
+    console.error(`Unknown site: ${site}`);
+    console.error(`Available sites: ${Object.keys(WEBSITES).join(', ')}`);
+    process.exit(1);
+  }
+
+  // Default: all sites
+  return Object.keys(WEBSITES) as SiteKey[];
+}
+
 // Main
 async function main() {
+  const sites = parseArgs();
+
   console.log('='.repeat(60));
-  console.log('Meeting Minds Group - Website Scraper');
+  console.log('Meeting Minds Group - Multi-Site Website Scraper');
   console.log('='.repeat(60));
-  console.log(`Website: ${WEBSITE_URL}`);
   console.log(`API URL: ${API_URL}`);
+  console.log(`Sites to scrape: ${sites.map((s) => WEBSITES[s].name).join(', ')}`);
   console.log('='.repeat(60));
   console.log();
 
-  // Crawl the website
-  const pages = await crawlWebsite(WEBSITE_URL);
+  const allPages: Page[] = [];
 
-  if (pages.length === 0) {
-    console.log('No pages found to ingest.');
+  // Crawl each website
+  for (const siteKey of sites) {
+    const site = WEBSITES[siteKey];
+    console.log(`\n${'─'.repeat(60)}`);
+    console.log(`Crawling: ${site.name} (${site.url})`);
+    console.log(`Brand: ${site.brand}`);
+    console.log(`${'─'.repeat(60)}`);
+
+    const pages = await crawlWebsite(site.url, site.brand, site.maxPages);
+    allPages.push(...pages);
+
+    console.log(`\nFound ${pages.length} pages from ${site.name}`);
+
+    // Delay between sites
+    if (sites.indexOf(siteKey) < sites.length - 1) {
+      console.log('Waiting before next site...');
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  }
+
+  if (allPages.length === 0) {
+    console.log('\nNo pages found to ingest.');
     return;
   }
 
-  console.log(`\nFound ${pages.length} pages:`);
-  for (const page of pages) {
-    console.log(`  - ${page.title} (${page.url})`);
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`Total pages found: ${allPages.length}`);
+  console.log(`${'='.repeat(60)}`);
+
+  // Group by brand for summary
+  const byBrand = allPages.reduce(
+    (acc, page) => {
+      acc[page.brand] = (acc[page.brand] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+
+  console.log('\nPages by brand:');
+  for (const [brand, count] of Object.entries(byBrand)) {
+    console.log(`  - ${brand}: ${count} pages`);
   }
 
   // Ingest to the API
-  await ingestPages(pages);
+  await ingestPages(allPages);
 }
 
 main().catch(console.error);

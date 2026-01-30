@@ -27,18 +27,17 @@
 			"binding": "VECTORS_KV",
 			"id": "5c5a1ea13b8f4df2ac575091fc09bdf3"
 		}
-	]
+	],
 	/**
-   * D1 Database for chat history (optional - not used yet)
-   * Create with: wrangler d1 create mmgroup-chat-db
+   * D1 Database for chat analytics
    */
-	// "d1_databases": [
-	// 	{
-	// 		"binding": "CHAT_DB",
-	// 		"database_name": "mmgroup-chat-db",
-	// 		"database_id": "YOUR_D1_DATABASE_ID"
-	// 	}
-	// ]
+	"d1_databases": [
+		{
+			"binding": "ANALYTICS_DB",
+			"database_name": "mmgroup-analytics",
+			"database_id": "e996d567-0f3c-4082-a655-d4a184600099"
+		}
+	]
 	/**
    * Vectorize (uncomment when upgrading to paid plan)
    * Create with: wrangler vectorize create mmgroup-vectors --dimensions=1536 --metric=cosine

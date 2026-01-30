@@ -2,19 +2,22 @@
  * Meeting Minds Group - RAG Chatbot API
  *
  * Endpoints:
- *   POST /chat         - Send a message and get AI response
- *   POST /chat/stream  - Streaming chat response
- *   POST /ingest       - Add content to knowledge base
- *   POST /ingest/bulk  - Bulk add multiple documents
- *   GET  /stats        - Get vector store statistics
- *   GET  /health       - Health check
- *   GET  /widget.js    - Embeddable chat widget
+ *   POST /chat           - Send a message and get AI response
+ *   POST /chat/stream    - Streaming chat response
+ *   POST /ingest         - Add content to knowledge base
+ *   POST /ingest/bulk    - Bulk add multiple documents
+ *   GET  /stats          - Get vector store statistics
+ *   GET  /analytics      - Chat analytics dashboard
+ *   GET  /analytics/export - Export chat logs as CSV
+ *   GET  /health         - Health check
+ *   GET  /widget.js      - Embeddable chat widget
  */
 
 import type { Env } from './types';
 import { handleChat, handleChatStream } from './routes/chat';
 import { handleIngest, handleBulkIngest, handleStats } from './routes/ingest';
 import { handleWidget } from './routes/widget';
+import { handleAnalytics, handleAnalyticsExport } from './routes/analytics';
 import { handleCors, addCorsHeaders } from './utils/cors';
 
 export default {
@@ -60,6 +63,15 @@ export default {
         // Stats endpoint
         case path === '/stats' && request.method === 'GET':
           response = await handleStats(request, env);
+          break;
+
+        // Analytics endpoints
+        case path === '/analytics' && request.method === 'GET':
+          response = await handleAnalytics(request, env);
+          break;
+
+        case path === '/analytics/export' && request.method === 'GET':
+          response = await handleAnalyticsExport(request, env);
           break;
 
         // Widget endpoint

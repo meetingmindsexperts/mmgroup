@@ -3,8 +3,11 @@ import type { Env, ChatRequest, ChatResponse, ChatMessage } from '../types';
 import { createEmbeddingsProvider } from '../providers/embeddings';
 import { createLLMProvider } from '../providers/llm';
 import { createVectorStoreProvider } from '../providers/vectorstore';
+import { logChat } from './analytics';
 
 export async function handleChat(request: Request, env: Env): Promise<Response> {
+  const startTime = Date.now();
+
   try {
     const body = (await request.json()) as ChatRequest;
 
@@ -78,6 +81,18 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
       sessionId,
       sources: sources.length > 0 ? sources : undefined,
     };
+
+    // Log chat for analytics (non-blocking)
+    const responseTime = Date.now() - startTime;
+    logChat(env, {
+      session_id: sessionId,
+      message: userMessage,
+      response: response,
+      response_time_ms: responseTime,
+      context_chunks: searchResults.filter((r) => r.score > 0.3).length,
+      origin: request.headers.get('origin'),
+      user_agent: request.headers.get('user-agent'),
+    });
 
     return Response.json(result);
   } catch (error) {
