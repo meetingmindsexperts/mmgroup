@@ -11,16 +11,16 @@ export class WorkersAIEmbeddings implements EmbeddingsProvider {
   }
 
   async embed(text: string): Promise<number[]> {
-    const result = await this.ai.run(this.model as BaseAiTextEmbeddingsModels, {
+    const result = (await this.ai.run(this.model as keyof AiModels, {
       text: [text],
-    });
+    })) as { data: number[][] };
     return result.data[0];
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {
-    const result = await this.ai.run(this.model as BaseAiTextEmbeddingsModels, {
+    const result = (await this.ai.run(this.model as keyof AiModels, {
       text: texts,
-    });
+    })) as { data: number[][] };
     return result.data;
   }
 

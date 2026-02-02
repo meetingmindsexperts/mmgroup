@@ -12,7 +12,7 @@ export class WorkersAILLM implements LLMProvider {
   }
 
   async chat(messages: ChatMessage[]): Promise<string> {
-    const result = await this.ai.run(this.model as BaseAiTextGenerationModels, {
+    const result = await this.ai.run(this.model as keyof AiModels, {
       messages: messages,
     });
 
@@ -25,7 +25,7 @@ export class WorkersAILLM implements LLMProvider {
   }
 
   async chatStream(messages: ChatMessage[]): Promise<ReadableStream<Uint8Array>> {
-    const stream = await this.ai.run(this.model as BaseAiTextGenerationModels, {
+    const stream = await this.ai.run(this.model as keyof AiModels, {
       messages: messages,
       stream: true,
     });
