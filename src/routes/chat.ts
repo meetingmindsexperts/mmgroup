@@ -8,9 +8,15 @@ import { logChat } from './analytics';
 export async function handleChat(request: Request, env: Env): Promise<Response> {
   const startTime = Date.now();
 
+  // Parse JSON body with specific error handling
+  let body: ChatRequest;
   try {
-    const body = (await request.json()) as ChatRequest;
+    body = (await request.json()) as ChatRequest;
+  } catch {
+    return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+  }
 
+  try {
     if (!body.message || typeof body.message !== 'string') {
       return Response.json({ error: 'Message is required' }, { status: 400 });
     }
@@ -53,11 +59,17 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
       },
     ];
 
-    // Add context if we found relevant documents
+    // Add context if we found relevant documents, or note if knowledge base is empty
     if (context.length > 0) {
       messages.push({
         role: 'system',
         content: `Here is relevant information to help answer the user's question:\n\n${context}`,
+      });
+    } else if (searchResults.length === 0) {
+      // Knowledge base is completely empty
+      messages.push({
+        role: 'system',
+        content: 'Note: The knowledge base is currently empty. You can still respond to greetings and provide the contact information from your system prompt, but you won\'t have specific content about services, events, or other details.',
       });
     }
 
@@ -107,14 +119,28 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
 
 // Streaming chat endpoint
 export async function handleChatStream(request: Request, env: Env): Promise<Response> {
+  // Parse JSON body with specific error handling
+  let body: ChatRequest;
   try {
-    const body = (await request.json()) as ChatRequest;
+    body = (await request.json()) as ChatRequest;
+  } catch {
+    return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+  }
 
+  try {
     if (!body.message || typeof body.message !== 'string') {
       return Response.json({ error: 'Message is required' }, { status: 400 });
     }
 
     const userMessage = body.message.trim();
+
+    if (userMessage.length === 0) {
+      return Response.json({ error: 'Message cannot be empty' }, { status: 400 });
+    }
+
+    if (userMessage.length > 2000) {
+      return Response.json({ error: 'Message too long (max 2000 characters)' }, { status: 400 });
+    }
 
     // Initialize providers
     const embeddings = createEmbeddingsProvider(env);
@@ -137,10 +163,17 @@ export async function handleChatStream(request: Request, env: Env): Promise<Resp
       { role: 'system', content: CONFIG.systemPrompt },
     ];
 
+    // Add context if we found relevant documents, or note if knowledge base is empty
     if (context.length > 0) {
       messages.push({
         role: 'system',
         content: `Here is relevant information to help answer the user's question:\n\n${context}`,
+      });
+    } else if (searchResults.length === 0) {
+      // Knowledge base is completely empty
+      messages.push({
+        role: 'system',
+        content: 'Note: The knowledge base is currently empty. You can still respond to greetings and provide the contact information from your system prompt, but you won\'t have specific content about services, events, or other details.',
       });
     }
 

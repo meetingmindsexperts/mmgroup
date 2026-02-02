@@ -9,6 +9,7 @@
  *   npm run scrape -- --site=experts  # Scrape only meetingmindsexperts.com
  *   npm run scrape -- --site=medulive # Scrape only medulive.online
  *   npm run scrape -- --site=medcom   # Scrape only medicalmindsexperts.com
+ *   npm run scrape -- URL1 URL2 ...   # Scrape specific URLs only
  *
  * Environment variables:
  *   API_URL - The worker URL (default: https://mmgroup.krishna-94f.workers.dev)
@@ -253,14 +254,34 @@ async function ingestPages(pages: Page[]): Promise<void> {
 }
 
 // Parse command line arguments
-function parseArgs(): SiteKey[] {
+interface ParsedArgs {
+  mode: 'sites' | 'urls';
+  sites?: SiteKey[];
+  urls?: string[];
+  brand?: string;
+}
+
+function parseArgs(): ParsedArgs {
   const args = process.argv.slice(2);
-  const siteArg = args.find((arg) => arg.startsWith('--site='));
+
+  // Check for --site flag
+  const siteArg = args.find((arg: string) => arg.startsWith('--site='));
+
+  // Check for --brand flag (used with URLs)
+  const brandArg = args.find((arg: string) => arg.startsWith('--brand='));
+  const brand = brandArg ? brandArg.split('=')[1] : 'MMG';
+
+  // Check for URLs (any arg that starts with http)
+  const urls = args.filter((arg: string) => arg.startsWith('http'));
+
+  if (urls.length > 0) {
+    return { mode: 'urls', urls, brand };
+  }
 
   if (siteArg) {
     const site = siteArg.split('=')[1] as SiteKey;
     if (site in WEBSITES) {
-      return [site];
+      return { mode: 'sites', sites: [site] };
     }
     console.error(`Unknown site: ${site}`);
     console.error(`Available sites: ${Object.keys(WEBSITES).join(', ')}`);
@@ -268,40 +289,58 @@ function parseArgs(): SiteKey[] {
   }
 
   // Default: all sites
-  return Object.keys(WEBSITES) as SiteKey[];
+  return { mode: 'sites', sites: Object.keys(WEBSITES) as SiteKey[] };
 }
 
 // Main
 async function main() {
-  const sites = parseArgs();
+  const args = parseArgs();
 
   console.log('='.repeat(60));
-  console.log('Meeting Minds Group - Multi-Site Website Scraper');
+  console.log('Meeting Minds Group - Website Scraper');
   console.log('='.repeat(60));
   console.log(`API URL: ${API_URL}`);
-  console.log(`Sites to scrape: ${sites.map((s) => WEBSITES[s].name).join(', ')}`);
-  console.log('='.repeat(60));
-  console.log();
 
   const allPages: Page[] = [];
 
-  // Crawl each website
-  for (const siteKey of sites) {
-    const site = WEBSITES[siteKey];
-    console.log(`\n${'─'.repeat(60)}`);
-    console.log(`Crawling: ${site.name} (${site.url})`);
-    console.log(`Brand: ${site.brand}`);
-    console.log(`${'─'.repeat(60)}`);
+  if (args.mode === 'urls' && args.urls) {
+    // Scrape specific URLs
+    console.log(`URLs to scrape: ${args.urls.length}`);
+    console.log(`Brand: ${args.brand}`);
+    console.log('='.repeat(60));
+    console.log();
 
-    const pages = await crawlWebsite(site.url, site.brand, site.maxPages);
-    allPages.push(...pages);
+    for (const url of args.urls) {
+      const page = await fetchPage(url, args.brand || 'MMG');
+      if (page) {
+        allPages.push(page);
+      }
+      // Small delay between pages
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  } else if (args.mode === 'sites' && args.sites) {
+    // Crawl entire sites
+    console.log(`Sites to scrape: ${args.sites.map((s: SiteKey) => WEBSITES[s].name).join(', ')}`);
+    console.log('='.repeat(60));
+    console.log();
 
-    console.log(`\nFound ${pages.length} pages from ${site.name}`);
+    for (const siteKey of args.sites) {
+      const site = WEBSITES[siteKey];
+      console.log(`\n${'─'.repeat(60)}`);
+      console.log(`Crawling: ${site.name} (${site.url})`);
+      console.log(`Brand: ${site.brand}`);
+      console.log(`${'─'.repeat(60)}`);
 
-    // Delay between sites
-    if (sites.indexOf(siteKey) < sites.length - 1) {
-      console.log('Waiting before next site...');
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const pages = await crawlWebsite(site.url, site.brand, site.maxPages);
+      allPages.push(...pages);
+
+      console.log(`\nFound ${pages.length} pages from ${site.name}`);
+
+      // Delay between sites
+      if (args.sites.indexOf(siteKey) < args.sites.length - 1) {
+        console.log('Waiting before next site...');
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
     }
   }
 
