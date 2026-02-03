@@ -17,7 +17,7 @@
 		"LLM_PROVIDER": "openai",
 		"EMBEDDING_PROVIDER": "openai",
 		"ALLOWED_ORIGIN": "https://meetingmindsgroup.com",
-		"SUPABASE_URL": ""
+		"SUPABASE_URL": "https://vpdfzubrfcmekwhyxmsg.supabase.co"
 	},
 	/**
 	 * Supabase configuration for lead capture

@@ -5,16 +5,18 @@ import { validateEmail as localValidateEmail } from '../../utils/leadDetection';
 /**
  * Supabase-based leads provider
  *
- * Stores leads in the mmg_chat_leads table and validates emails
- * via edge function or local validation as fallback.
+ * Stores leads via secure edge function that validates the chatbot API key.
+ * This ensures only authorized requests from the chatbot can insert leads.
  */
 export class SupabaseLeadsProvider implements LeadsProvider {
   private supabaseUrl: string;
   private anonKey: string;
+  private chatbotApiKey: string;
 
-  constructor(supabaseUrl: string, anonKey: string) {
+  constructor(supabaseUrl: string, anonKey: string, chatbotApiKey: string) {
     this.supabaseUrl = supabaseUrl;
     this.anonKey = anonKey;
+    this.chatbotApiKey = chatbotApiKey;
   }
 
   /**
@@ -49,17 +51,16 @@ export class SupabaseLeadsProvider implements LeadsProvider {
   }
 
   /**
-   * Save a lead to the mmg_chat_leads table
+   * Save a lead via secure edge function
+   * The edge function validates the chatbot API key before inserting
    */
   async saveLead(lead: LeadData): Promise<LeadCaptureResult> {
     try {
-      const response = await fetch(`${this.supabaseUrl}/rest/v1/mmg_chat_leads`, {
+      const response = await fetch(`${this.supabaseUrl}/functions/v1/capture-lead`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          apikey: this.anonKey,
-          Authorization: `Bearer ${this.anonKey}`,
-          Prefer: 'return=representation',
+          'x-chatbot-key': this.chatbotApiKey,
         },
         body: JSON.stringify({
           name: lead.name || null,
@@ -72,12 +73,16 @@ export class SupabaseLeadsProvider implements LeadsProvider {
         }),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Supabase lead save error:', errorText);
+      const data = (await response.json()) as {
+        captured?: boolean;
+        leadId?: string;
+        error?: string;
+      };
 
-        // Check for duplicate email error
-        if (response.status === 409 || errorText.includes('duplicate')) {
+      if (!response.ok) {
+        console.error('Lead capture error:', data);
+
+        if (data.error === 'Email already registered') {
           return {
             captured: false,
             validationMessage: 'This email has already been registered',
@@ -86,16 +91,13 @@ export class SupabaseLeadsProvider implements LeadsProvider {
 
         return {
           captured: false,
-          validationMessage: 'Failed to save lead information',
+          validationMessage: data.error || 'Failed to save lead information',
         };
       }
 
-      const data = await response.json();
-      const savedLead = Array.isArray(data) ? data[0] : data;
-
       return {
-        captured: true,
-        leadId: savedLead.uid || savedLead.id?.toString(),
+        captured: data.captured ?? false,
+        leadId: data.leadId,
         emailValid: lead.valid_email,
       };
     } catch (error) {

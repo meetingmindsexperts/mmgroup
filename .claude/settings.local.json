@@ -7,7 +7,16 @@
       "Bash(git commit:*)",
       "Bash(npm run scrape:*)",
       "Bash(wrangler d1 create:*)",
-      "Bash(npx wrangler:*)"
+      "Bash(npx wrangler:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(npm audit:*)",
+      "Bash(ls:*)",
+      "Bash(brew install:*)",
+      "Bash(npm install:*)",
+      "Bash(npx supabase:*)"
     ]
   }
 }

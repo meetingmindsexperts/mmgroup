@@ -81,6 +81,7 @@ export interface Env {
   // Supabase for lead capture
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
+  CHATBOT_API_KEY: string; // Secret key to authenticate with Supabase edge function
 
   // Provider toggles
   VECTOR_STORE: 'kv' | 'vectorize';
