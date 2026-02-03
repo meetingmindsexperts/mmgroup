@@ -64,11 +64,20 @@ const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi;
 // Phone regex pattern (international formats)
 const PHONE_REGEX = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{1,4}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,9}/g;
 
-// Name pattern (simple - words that look like names before/after email)
+// Name pattern (ordered by specificity - most specific first)
 const NAME_PATTERNS = [
-  /(?:my name is|i'm|i am|this is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  // "my name is John Smith" or "name is John Smith" - most explicit
+  /(?:my name is|name is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  // "I'm John Smith" or "I am John Smith" - require two-word name to avoid "I am interested"
+  /(?:i'm|i am)\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
+  // "this is John Smith"
+  /this is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  // "John Smith here" or "John Smith speaking"
   /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:here|speaking)/i,
+  // "John Smith, my email is..." or "John Smith. Email:"
   /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[,.]?\s*(?:my email|email|here)/i,
+  // "call me John" or "you can call me John Smith"
+  /call me\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
 ];
 
 export interface ExtractedLeadInfo {
