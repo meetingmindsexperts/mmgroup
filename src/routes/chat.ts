@@ -81,17 +81,52 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
       content: userMessage,
     });
 
-    // Step 5: Generate response
-    let response = await llm.chat(messages);
-
-    // Step 6: Lead capture - check if user provided contact info
+    // Step 5: Pre-validate lead info BEFORE LLM response (so LLM knows how to respond)
     let leadCaptureResult: LeadCaptureResult | null = null;
+    let leadContext = '';
+
+    if (isLeadCaptureEnabled(env)) {
+      const leadInfo = extractLeadInfo(userMessage);
+      const hasEmail = !!leadInfo.email;
+      const hasName = !!leadInfo.name;
+
+      if (hasEmail && hasName) {
+        // User provided both name and email
+        const validation = validateEmail(leadInfo.email!);
+
+        if (validation.valid) {
+          leadContext = `\n\n[SYSTEM: The user provided their name "${leadInfo.name}" and a VALID email "${leadInfo.email}". Thank them by name and confirm the team will follow up at their email. Do NOT question the validity.]`;
+        } else {
+          leadContext = `\n\n[SYSTEM: The user provided their name "${leadInfo.name}" but an INVALID email. Reason: ${validation.reason}. Thank them for sharing their name, but politely ask for a different email address.]`;
+        }
+      } else if (hasEmail && !hasName) {
+        // User provided only email - ask for name
+        const validation = validateEmail(leadInfo.email!);
+
+        if (validation.valid) {
+          leadContext = `\n\n[SYSTEM: The user provided a VALID email "${leadInfo.email}" but no name. Acknowledge their email and ask: "Thanks! May I also have your name so our team knows who to reach out to?"]`;
+        } else {
+          leadContext = `\n\n[SYSTEM: The user provided an INVALID email. Reason: ${validation.reason}. Politely ask for a different email address.]`;
+        }
+      } else if (hasName && !hasEmail) {
+        // User provided only name - ask for email
+        leadContext = `\n\n[SYSTEM: The user provided their name "${leadInfo.name}" but no email. Acknowledge their name warmly and ask: "Nice to meet you, ${leadInfo.name}! Could you also share your email so our team can follow up with you?"]`;
+      }
+
+      // Add lead context to the message if we have any
+      if (leadContext) {
+        messages[messages.length - 1].content += leadContext;
+      }
+    }
+
+    // Step 6: Generate response (now with email validation context)
+    const response = await llm.chat(messages);
+
+    // Step 7: Lead capture - save valid leads to database
     if (isLeadCaptureEnabled(env) && hasContactInfo(userMessage)) {
       leadCaptureResult = await processLeadCapture(env, userMessage, sessionId, request);
 
-      // If email was invalid, add context for the next response
       if (leadCaptureResult && !leadCaptureResult.captured && leadCaptureResult.validationMessage) {
-        // The LLM response already went out, but we note it for analytics
         console.log('Lead capture failed:', leadCaptureResult.validationMessage);
       }
     }
