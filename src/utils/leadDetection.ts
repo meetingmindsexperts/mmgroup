@@ -80,6 +80,19 @@ const NAME_PATTERNS = [
   /call me\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
 ];
 
+// Common words that should NOT be treated as names
+const NOT_NAMES = new Set([
+  'hi', 'hello', 'hey', 'yes', 'no', 'ok', 'okay', 'thanks', 'thank', 'please',
+  'help', 'contact', 'sales', 'support', 'info', 'question', 'inquiry',
+  'interested', 'demo', 'pricing', 'quote', 'meeting', 'call', 'email',
+  'subscribe', 'register', 'book', 'schedule', 'service', 'services',
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should',
+  'can', 'may', 'might', 'must', 'shall', 'need', 'want', 'like', 'more',
+  'about', 'with', 'from', 'your', 'you', 'me', 'my', 'i', 'we', 'us', 'our',
+  'what', 'when', 'where', 'why', 'how', 'which', 'who', 'whom', 'whose',
+]);
+
 export interface ExtractedLeadInfo {
   name?: string;
   email?: string;
@@ -123,12 +136,42 @@ export function extractPhone(text: string): string | null {
  * Extract name from text
  */
 export function extractName(text: string): string | null {
+  // First try explicit patterns like "my name is..."
   for (const pattern of NAME_PATTERNS) {
     const match = text.match(pattern);
     if (match && match[1]) {
       return match[1].trim();
     }
   }
+
+  // Fallback: check if the message is a standalone name (1-3 words, no email/common words)
+  const trimmed = text.trim();
+  const words = trimmed.split(/\s+/);
+
+  // Only consider short messages (1-3 words) as potential standalone names
+  if (words.length >= 1 && words.length <= 3) {
+    // Check if any word is a common non-name word
+    const hasCommonWord = words.some((word) => NOT_NAMES.has(word.toLowerCase()));
+
+    // Check if message contains email or looks like a question/command
+    const hasEmail = EMAIL_REGEX.test(trimmed);
+    const isQuestion = trimmed.includes('?');
+    const hasSpecialChars = /[@#$%^&*()+=\[\]{}|\\<>\/]/.test(trimmed);
+
+    // If it's short, doesn't have common words, no email, not a question
+    if (!hasCommonWord && !hasEmail && !isQuestion && !hasSpecialChars) {
+      // Capitalize each word properly and return as name
+      const potentialName = words
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+
+      // Final check: must have at least 2 characters per word
+      if (words.every((word) => word.length >= 2)) {
+        return potentialName;
+      }
+    }
+  }
+
   return null;
 }
 
