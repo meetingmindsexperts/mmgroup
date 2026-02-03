@@ -4,8 +4,14 @@ import { createEmbeddingsProvider } from '../providers/embeddings';
 import { createLLMProvider } from '../providers/llm';
 import { createVectorStoreProvider } from '../providers/vectorstore';
 import { createLeadsProvider, isLeadCaptureEnabled } from '../providers/leads';
-import { extractLeadInfo, hasContactInfo, validateEmail } from '../utils/leadDetection';
+import { extractLeadInfo, validateEmail } from '../utils/leadDetection';
 import { logChat } from './analytics';
+import {
+  getConversation,
+  addMessage,
+  formatPreviousMessages,
+  getAccumulatedLeadInfo,
+} from '../utils/conversationMemory';
 
 export async function handleChat(request: Request, env: Env): Promise<Response> {
   const startTime = Date.now();
@@ -40,20 +46,24 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
     const llm = createLLMProvider(env);
     const vectorStore = createVectorStoreProvider(env);
 
-    // Step 1: Embed the user's query
+    // Step 1: Load conversation history
+    const conversation = await getConversation(env.VECTORS_KV, sessionId);
+    const previousMessages = formatPreviousMessages(conversation);
+    const accumulatedLeadInfo = getAccumulatedLeadInfo(conversation);
+
+    // Step 2: Embed the user's query
     const queryEmbedding = await embeddings.embed(userMessage);
 
-    // Step 2: Search for relevant context
+    // Step 3: Search for relevant context
     const searchResults = await vectorStore.search(queryEmbedding, CONFIG.rag.topK);
 
-    // Step 3: Build the context from search results
-    // Lower threshold to 0.1 to include more potentially relevant content
+    // Step 4: Build the context from search results
     const context = searchResults
       .filter((r) => r.score > 0.1)
       .map((r) => r.content)
       .join('\n\n---\n\n');
 
-    // Step 4: Build messages for the LLM
+    // Step 5: Build messages for the LLM
     const messages: ChatMessage[] = [
       {
         role: 'system',
@@ -68,49 +78,77 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
         content: `Here is relevant information to help answer the user's question:\n\n${context}`,
       });
     } else if (searchResults.length === 0) {
-      // Knowledge base is completely empty
       messages.push({
         role: 'system',
         content: 'Note: The knowledge base is currently empty. You can still respond to greetings and provide the contact information from your system prompt, but you won\'t have specific content about services, events, or other details.',
       });
     }
 
-    // Add user message
+    // Add previous conversation history for context
+    if (previousMessages.length > 0) {
+      messages.push(...previousMessages);
+    }
+
+    // Add current user message
     messages.push({
       role: 'user',
       content: userMessage,
     });
 
-    // Step 5: Pre-validate lead info BEFORE LLM response (so LLM knows how to respond)
+    // Step 6: Pre-validate lead info BEFORE LLM response (so LLM knows how to respond)
     let leadCaptureResult: LeadCaptureResult | null = null;
     let leadContext = '';
+    let currentLeadInfo: { name?: string; email?: string; phone?: string } = {};
 
     if (isLeadCaptureEnabled(env)) {
       const leadInfo = extractLeadInfo(userMessage);
-      const hasEmail = !!leadInfo.email;
-      const hasName = !!leadInfo.name;
+
+      // Combine current message lead info with accumulated info from previous messages
+      const combinedName = leadInfo.name || accumulatedLeadInfo.name;
+      const combinedEmail = leadInfo.email || accumulatedLeadInfo.email;
+      const combinedPhone = leadInfo.phone || accumulatedLeadInfo.phone;
+
+      // Track what was found in current message for saving
+      currentLeadInfo = {
+        name: leadInfo.name,
+        email: leadInfo.email,
+        phone: leadInfo.phone,
+      };
+
+      const hasEmail = !!combinedEmail;
+      const hasName = !!combinedName;
 
       if (hasEmail && hasName) {
-        // User provided both name and email
-        const validation = validateEmail(leadInfo.email!);
+        // We have both name and email (possibly from different messages)
+        const validation = validateEmail(combinedEmail!);
 
         if (validation.valid) {
-          leadContext = `\n\n[SYSTEM: The user provided their name "${leadInfo.name}" and a VALID email "${leadInfo.email}". Thank them by name and confirm the team will follow up at their email. Do NOT question the validity.]`;
+          leadContext = `\n\n[SYSTEM: We now have the user's name "${combinedName}" and a VALID email "${combinedEmail}". Thank them by name and confirm the team will follow up at their email. Do NOT question the validity.]`;
         } else {
-          leadContext = `\n\n[SYSTEM: The user provided their name "${leadInfo.name}" but an INVALID email. Reason: ${validation.reason}. Thank them for sharing their name, but politely ask for a different email address.]`;
+          leadContext = `\n\n[SYSTEM: We have the user's name "${combinedName}" but an INVALID email. Reason: ${validation.reason}. Thank them for sharing their name, but politely ask for a different email address.]`;
         }
       } else if (hasEmail && !hasName) {
-        // User provided only email - ask for name
-        const validation = validateEmail(leadInfo.email!);
+        // User provided email but no name yet
+        const validation = validateEmail(combinedEmail!);
 
         if (validation.valid) {
-          leadContext = `\n\n[SYSTEM: The user provided a VALID email "${leadInfo.email}" but no name. Acknowledge their email and ask: "Thanks! May I also have your name so our team knows who to reach out to?"]`;
+          const emailPrefix = combinedEmail!.split('@')[0].toLowerCase();
+          const genericPrefixes = ['info', 'contact', 'sales', 'support', 'admin', 'hello', 'hi', 'mail', 'email', 'office', 'team', 'enquiry', 'inquiry', 'help', 'service', 'noreply', 'no-reply'];
+          const potentialName = emailPrefix.replace(/[._-]/g, ' ').split(' ')[0].replace(/\d+/g, '');
+          const isGenericPrefix = genericPrefixes.includes(potentialName.toLowerCase());
+
+          if (potentialName && potentialName.length >= 2 && !isGenericPrefix) {
+            const capitalizedName = potentialName.charAt(0).toUpperCase() + potentialName.slice(1).toLowerCase();
+            leadContext = `\n\n[SYSTEM: The user provided a VALID email "${combinedEmail}". Confirm receipt warmly: "Thank you, ${capitalizedName}! Our team will reach out to you at ${combinedEmail} shortly." Do NOT ask for more information.]`;
+          } else {
+            leadContext = `\n\n[SYSTEM: The user provided a VALID email "${combinedEmail}". Confirm receipt: "Thank you! Our team will reach out to you at ${combinedEmail} shortly." Do NOT ask for name or more information.]`;
+          }
         } else {
           leadContext = `\n\n[SYSTEM: The user provided an INVALID email. Reason: ${validation.reason}. Politely ask for a different email address.]`;
         }
       } else if (hasName && !hasEmail) {
-        // User provided only name - ask for email
-        leadContext = `\n\n[SYSTEM: The user provided their name "${leadInfo.name}" but no email. Acknowledge their name warmly and ask: "Nice to meet you, ${leadInfo.name}! Could you also share your email so our team can follow up with you?"]`;
+        // User provided name but no email yet
+        leadContext = `\n\n[SYSTEM: The user provided their name "${combinedName}" but no email yet. Acknowledge their name warmly and ask: "Nice to meet you, ${combinedName}! Could you also share your email so our team can follow up with you?"]`;
       }
 
       // Add lead context to the message if we have any
@@ -119,12 +157,28 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
       }
     }
 
-    // Step 6: Generate response (now with email validation context)
+    // Step 7: Generate response (now with email validation context)
     const response = await llm.chat(messages);
 
-    // Step 7: Lead capture - save valid leads to database
-    if (isLeadCaptureEnabled(env) && hasContactInfo(userMessage)) {
-      leadCaptureResult = await processLeadCapture(env, userMessage, sessionId, request);
+    // Step 8: Save conversation history
+    await addMessage(env.VECTORS_KV, sessionId, { role: 'user', content: userMessage }, currentLeadInfo);
+    await addMessage(env.VECTORS_KV, sessionId, { role: 'assistant', content: response });
+
+    // Step 9: Lead capture - save valid leads to database (using combined info)
+    const combinedLeadInfoForCapture = {
+      name: currentLeadInfo.name || accumulatedLeadInfo.name,
+      email: currentLeadInfo.email || accumulatedLeadInfo.email,
+      phone: currentLeadInfo.phone || accumulatedLeadInfo.phone,
+    };
+
+    if (isLeadCaptureEnabled(env) && combinedLeadInfoForCapture.email) {
+      leadCaptureResult = await processLeadCaptureWithInfo(
+        env,
+        combinedLeadInfoForCapture,
+        userMessage,
+        sessionId,
+        request
+      );
 
       if (leadCaptureResult && !leadCaptureResult.captured && leadCaptureResult.validationMessage) {
         console.log('Lead capture failed:', leadCaptureResult.validationMessage);
@@ -250,11 +304,12 @@ export async function handleChatStream(request: Request, env: Env): Promise<Resp
 }
 
 /**
- * Process lead capture from user message
- * Extracts contact info, validates email, and saves to Supabase
+ * Process lead capture with combined lead info from conversation
+ * Uses accumulated name/email/phone from multiple messages
  */
-async function processLeadCapture(
+async function processLeadCaptureWithInfo(
   env: Env,
+  leadInfo: { name?: string; email?: string; phone?: string },
   userMessage: string,
   sessionId: string,
   request: Request
@@ -265,11 +320,7 @@ async function processLeadCapture(
       return null;
     }
 
-    // Extract contact information from the message
-    const leadInfo = extractLeadInfo(userMessage);
-
     if (!leadInfo.email) {
-      // No email found, can't capture lead
       return null;
     }
 
