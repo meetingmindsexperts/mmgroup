@@ -1,8 +1,10 @@
 import { CONFIG } from '../config';
-import type { Env, ChatRequest, ChatResponse, ChatMessage } from '../types';
+import type { Env, ChatRequest, ChatResponse, ChatMessage, LeadData, LeadCaptureResult } from '../types';
 import { createEmbeddingsProvider } from '../providers/embeddings';
 import { createLLMProvider } from '../providers/llm';
 import { createVectorStoreProvider } from '../providers/vectorstore';
+import { createLeadsProvider, isLeadCaptureEnabled } from '../providers/leads';
+import { extractLeadInfo, hasContactInfo, validateEmail } from '../utils/leadDetection';
 import { logChat } from './analytics';
 
 export async function handleChat(request: Request, env: Env): Promise<Response> {
@@ -80,7 +82,19 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
     });
 
     // Step 5: Generate response
-    const response = await llm.chat(messages);
+    let response = await llm.chat(messages);
+
+    // Step 6: Lead capture - check if user provided contact info
+    let leadCaptureResult: LeadCaptureResult | null = null;
+    if (isLeadCaptureEnabled(env) && hasContactInfo(userMessage)) {
+      leadCaptureResult = await processLeadCapture(env, userMessage, sessionId, request);
+
+      // If email was invalid, add context for the next response
+      if (leadCaptureResult && !leadCaptureResult.captured && leadCaptureResult.validationMessage) {
+        // The LLM response already went out, but we note it for analytics
+        console.log('Lead capture failed:', leadCaptureResult.validationMessage);
+      }
+    }
 
     // Get source URLs if available
     const sources = searchResults
@@ -88,10 +102,11 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
       .map((r) => r.metadata!.url!)
       .filter((url, index, arr) => arr.indexOf(url) === index); // Dedupe
 
-    const result: ChatResponse = {
+    const result: ChatResponse & { leadCaptured?: boolean } = {
       response,
       sessionId,
       sources: sources.length > 0 ? sources : undefined,
+      leadCaptured: leadCaptureResult?.captured,
     };
 
     // Log chat for analytics (non-blocking)
@@ -196,5 +211,80 @@ export async function handleChatStream(request: Request, env: Env): Promise<Resp
       { error: 'An error occurred processing your request' },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * Process lead capture from user message
+ * Extracts contact info, validates email, and saves to Supabase
+ */
+async function processLeadCapture(
+  env: Env,
+  userMessage: string,
+  sessionId: string,
+  request: Request
+): Promise<LeadCaptureResult | null> {
+  try {
+    const leadsProvider = createLeadsProvider(env);
+    if (!leadsProvider) {
+      return null;
+    }
+
+    // Extract contact information from the message
+    const leadInfo = extractLeadInfo(userMessage);
+
+    if (!leadInfo.email) {
+      // No email found, can't capture lead
+      return null;
+    }
+
+    // Validate email (format + disposable check)
+    const validation = validateEmail(leadInfo.email);
+    if (!validation.valid) {
+      return {
+        captured: false,
+        emailValid: false,
+        validationMessage: validation.reason,
+      };
+    }
+
+    // Also validate via Supabase edge function if available
+    const serverValidation = await leadsProvider.validateEmail(leadInfo.email);
+    if (!serverValidation.valid) {
+      return {
+        captured: false,
+        emailValid: false,
+        validationMessage: serverValidation.reason,
+      };
+    }
+
+    // Get IP address from request headers
+    const ipAddress =
+      request.headers.get('cf-connecting-ip') ||
+      request.headers.get('x-forwarded-for')?.split(',')[0] ||
+      null;
+
+    // Parse phone number to integer if present
+    const phoneNumber = leadInfo.phone ? parseInt(leadInfo.phone.replace(/\D/g, ''), 10) : undefined;
+
+    // Save the lead
+    const lead: LeadData = {
+      name: leadInfo.name,
+      email: leadInfo.email,
+      phone: phoneNumber && !isNaN(phoneNumber) ? phoneNumber : undefined,
+      ip_address: ipAddress || undefined,
+      chat_context: {
+        message: userMessage.slice(0, 500),
+        timestamp: new Date().toISOString(),
+      },
+      valid_email: true,
+      session_id: parseInt(sessionId.replace(/\D/g, '').slice(0, 15), 10) || undefined,
+    };
+
+    const result = await leadsProvider.saveLead(lead);
+    return result;
+  } catch (error) {
+    console.error('Lead capture error:', error);
+    return null;
   }
 }

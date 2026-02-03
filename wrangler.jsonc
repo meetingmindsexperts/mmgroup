@@ -16,8 +16,14 @@
 		"VECTOR_STORE": "kv",
 		"LLM_PROVIDER": "openai",
 		"EMBEDDING_PROVIDER": "openai",
-		"ALLOWED_ORIGIN": "https://meetingmindsgroup.com"
+		"ALLOWED_ORIGIN": "https://meetingmindsgroup.com",
+		"SUPABASE_URL": ""
 	},
+	/**
+	 * Supabase configuration for lead capture
+	 * Set SUPABASE_URL above to your project URL (e.g., https://xxx.supabase.co)
+	 * Add SUPABASE_ANON_KEY as a secret: wrangler secret put SUPABASE_ANON_KEY
+	 */
 	/**
    * KV Namespace for vector storage (free tier)
    * Create with: wrangler kv namespace create VECTORS_KV

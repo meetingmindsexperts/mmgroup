@@ -38,6 +38,29 @@ export interface SearchResult {
   metadata?: Record<string, string>;
 }
 
+// Lead capture data (matches Supabase mmg_chat_leads table)
+export interface LeadData {
+  name?: string;
+  email: string;
+  phone?: number;
+  ip_address?: string;
+  chat_context?: Record<string, unknown>;
+  valid_email?: boolean;
+  session_id?: number;
+}
+
+export interface LeadCaptureResult {
+  captured: boolean;
+  leadId?: string;
+  emailValid?: boolean;
+  validationMessage?: string;
+}
+
+export interface EmailValidationResult {
+  valid: boolean;
+  reason?: string;
+}
+
 // Environment bindings
 export interface Env {
   // KV for vector storage (free tier)
@@ -54,6 +77,10 @@ export interface Env {
 
   // Configuration
   OPENAI_API_KEY: string;
+
+  // Supabase for lead capture
+  SUPABASE_URL: string;
+  SUPABASE_ANON_KEY: string;
 
   // Provider toggles
   VECTOR_STORE: 'kv' | 'vectorize';
