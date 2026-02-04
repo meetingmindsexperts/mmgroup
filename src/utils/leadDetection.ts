@@ -78,19 +78,30 @@ const NAME_PATTERNS = [
   /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[,.]?\s*(?:my email|email|here)/i,
   // "call me John" or "you can call me John Smith"
   /call me\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  // "Krishna, krishna@domain.com" - name followed by comma and email
+  /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*,\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/i,
 ];
 
 // Common words that should NOT be treated as names
 const NOT_NAMES = new Set([
+  // Greetings and slang
   'hi', 'hello', 'hey', 'yes', 'no', 'ok', 'okay', 'thanks', 'thank', 'please',
+  'whats', 'what', 'up', 'sup', 'yo', 'hiya', 'howdy', 'heya', 'ello', 'hola',
+  'good', 'morning', 'afternoon', 'evening', 'night', 'bye', 'goodbye', 'cya',
+  // Business terms
   'help', 'contact', 'sales', 'support', 'info', 'question', 'inquiry',
   'interested', 'demo', 'pricing', 'quote', 'meeting', 'call', 'email',
   'subscribe', 'register', 'book', 'schedule', 'service', 'services',
+  'event', 'events', 'organizing', 'organize', 'organise', 'plan', 'planning',
+  // Common verbs and articles
   'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
   'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should',
   'can', 'may', 'might', 'must', 'shall', 'need', 'want', 'like', 'more',
   'about', 'with', 'from', 'your', 'you', 'me', 'my', 'i', 'we', 'us', 'our',
-  'what', 'when', 'where', 'why', 'how', 'which', 'who', 'whom', 'whose',
+  'when', 'where', 'why', 'how', 'which', 'who', 'whom', 'whose',
+  // Other common words
+  'just', 'already', 'gave', 'give', 'get', 'got', 'know', 'knew', 'tell', 'told',
+  'said', 'say', 'see', 'saw', 'look', 'looking', 'find', 'found', 'think', 'thought',
 ]);
 
 export interface ExtractedLeadInfo {

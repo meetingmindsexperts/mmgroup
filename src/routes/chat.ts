@@ -142,13 +142,14 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
         const hasEmail = !!combinedEmail;
         const hasName = !!combinedName;
 
-        // Check if we already have complete lead info from previous messages
-        const alreadyHaveCompleteInfo = accumulatedLeadInfo.email && accumulatedLeadInfo.name;
+        // Check if we already have email from previous messages (email is sufficient, name is optional)
+        const alreadyHaveEmail = !!accumulatedLeadInfo.email;
 
-        if (alreadyHaveCompleteInfo && !leadInfo.email && !leadInfo.name) {
-          // User already provided info in previous messages, don't ask again
+        if (alreadyHaveEmail && !leadInfo.email && !leadInfo.name) {
+          // User already provided email in previous messages, don't ask again
           // Just let the LLM respond naturally to their question
-          leadContext = `\n\n[SYSTEM: This user already provided their contact info earlier (${accumulatedLeadInfo.name}, ${accumulatedLeadInfo.email}). Do NOT ask for their name or email again. Just respond to their current question naturally.]`;
+          const nameInfo = accumulatedLeadInfo.name ? `${accumulatedLeadInfo.name}, ` : '';
+          leadContext = `\n\n[SYSTEM: This user already provided their contact info earlier (${nameInfo}${accumulatedLeadInfo.email}). Do NOT ask for their name or email again. Just respond to their current question naturally.]`;
         } else if (hasEmail && hasName) {
           // We have both name and email (possibly from different messages)
           const validation = validateEmail(combinedEmail!);
