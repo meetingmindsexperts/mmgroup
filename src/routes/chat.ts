@@ -13,6 +13,22 @@ import {
   getAccumulatedLeadInfo,
 } from '../utils/conversationMemory';
 
+// Patterns that indicate user is asking FOR information, not providing it
+const ASKING_FOR_INFO_PATTERNS = [
+  /\b(?:what(?:'s| is)?|where(?:'s| is)?|how|give me|send me|share|provide|show me)\b.*\b(?:email|phone|contact|number|address)\b/i,
+  /\b(?:email|phone|contact|number|address)\b.*\b(?:please|address|info|information)\b/i,
+  /\bi (?:want|need|would like)\b.*\b(?:email|phone|contact|the)\b/i,
+  /\b(?:sales|support|team|company)\s+(?:email|phone|contact)\b/i,
+  /\bcontact\s+(?:info|information|details)\b/i,
+];
+
+/**
+ * Check if user is asking FOR contact information (not providing their own)
+ */
+function isAskingForInfo(message: string): boolean {
+  return ASKING_FOR_INFO_PATTERNS.some((pattern) => pattern.test(message));
+}
+
 export async function handleChat(request: Request, env: Env): Promise<Response> {
   const startTime = Date.now();
 
@@ -101,61 +117,73 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
     let currentLeadInfo: { name?: string; email?: string; phone?: string } = {};
 
     if (isLeadCaptureEnabled(env)) {
-      const leadInfo = extractLeadInfo(userMessage);
+      // First check if user is asking FOR information (not providing their own)
+      const askingForInfo = isAskingForInfo(userMessage);
 
-      // Combine current message lead info with accumulated info from previous messages
-      const combinedName = leadInfo.name || accumulatedLeadInfo.name;
-      const combinedEmail = leadInfo.email || accumulatedLeadInfo.email;
-      const combinedPhone = leadInfo.phone || accumulatedLeadInfo.phone;
+      if (askingForInfo) {
+        // User is asking for sales email, contact info, etc. - don't treat as lead capture
+        // Let RAG/LLM answer from knowledge base
+        leadContext = `\n\n[SYSTEM: The user is asking for contact information (sales email, phone, etc.). Answer their question using the knowledge base context. Do NOT ask for their contact info right now.]`;
+      } else {
+        const leadInfo = extractLeadInfo(userMessage);
 
-      // Track what was found in current message for saving
-      currentLeadInfo = {
-        name: leadInfo.name,
-        email: leadInfo.email,
-        phone: leadInfo.phone,
-      };
+        // Combine current message lead info with accumulated info from previous messages
+        let combinedName = leadInfo.name || accumulatedLeadInfo.name;
+        const combinedEmail = leadInfo.email || accumulatedLeadInfo.email;
+        const combinedPhone = leadInfo.phone || accumulatedLeadInfo.phone;
 
-      const hasEmail = !!combinedEmail;
-      const hasName = !!combinedName;
+        // Track what was found in current message for saving
+        currentLeadInfo = {
+          name: leadInfo.name,
+          email: leadInfo.email,
+          phone: leadInfo.phone,
+        };
 
-      // Check if we already have complete lead info from previous messages
-      const alreadyHaveCompleteInfo = accumulatedLeadInfo.email && accumulatedLeadInfo.name;
+        const hasEmail = !!combinedEmail;
+        const hasName = !!combinedName;
 
-      if (alreadyHaveCompleteInfo && !leadInfo.email && !leadInfo.name) {
-        // User already provided info in previous messages, don't ask again
-        // Just let the LLM respond naturally to their question
-        leadContext = `\n\n[SYSTEM: This user already provided their contact info earlier (${accumulatedLeadInfo.name}, ${accumulatedLeadInfo.email}). Do NOT ask for their name or email again. Just respond to their current question naturally.]`;
-      } else if (hasEmail && hasName) {
-        // We have both name and email (possibly from different messages)
-        const validation = validateEmail(combinedEmail!);
+        // Check if we already have complete lead info from previous messages
+        const alreadyHaveCompleteInfo = accumulatedLeadInfo.email && accumulatedLeadInfo.name;
 
-        if (validation.valid) {
-          leadContext = `\n\n[SYSTEM: We now have the user's name "${combinedName}" and a VALID email "${combinedEmail}". Thank them by name and confirm the team will follow up at their email. Do NOT question the validity.]`;
-        } else {
-          leadContext = `\n\n[SYSTEM: We have the user's name "${combinedName}" but an INVALID email. Reason: ${validation.reason}. Thank them for sharing their name, but politely ask for a different email address.]`;
-        }
-      } else if (hasEmail && !hasName) {
-        // User provided email but no name yet
-        const validation = validateEmail(combinedEmail!);
+        if (alreadyHaveCompleteInfo && !leadInfo.email && !leadInfo.name) {
+          // User already provided info in previous messages, don't ask again
+          // Just let the LLM respond naturally to their question
+          leadContext = `\n\n[SYSTEM: This user already provided their contact info earlier (${accumulatedLeadInfo.name}, ${accumulatedLeadInfo.email}). Do NOT ask for their name or email again. Just respond to their current question naturally.]`;
+        } else if (hasEmail && hasName) {
+          // We have both name and email (possibly from different messages)
+          const validation = validateEmail(combinedEmail!);
 
-        if (validation.valid) {
-          const emailPrefix = combinedEmail!.split('@')[0].toLowerCase();
-          const genericPrefixes = ['info', 'contact', 'sales', 'support', 'admin', 'hello', 'hi', 'mail', 'email', 'office', 'team', 'enquiry', 'inquiry', 'help', 'service', 'noreply', 'no-reply'];
-          const potentialName = emailPrefix.replace(/[._-]/g, ' ').split(' ')[0].replace(/\d+/g, '');
-          const isGenericPrefix = genericPrefixes.includes(potentialName.toLowerCase());
-
-          if (potentialName && potentialName.length >= 2 && !isGenericPrefix) {
-            const capitalizedName = potentialName.charAt(0).toUpperCase() + potentialName.slice(1).toLowerCase();
-            leadContext = `\n\n[SYSTEM: The user provided a VALID email "${combinedEmail}". Confirm receipt warmly: "Thank you, ${capitalizedName}! Our team will reach out to you at ${combinedEmail} shortly." Do NOT ask for more information.]`;
+          if (validation.valid) {
+            leadContext = `\n\n[SYSTEM: We now have the user's name "${combinedName}" and a VALID email "${combinedEmail}". Thank them by name and confirm the team will follow up at their email. Do NOT question the validity.]`;
           } else {
-            leadContext = `\n\n[SYSTEM: The user provided a VALID email "${combinedEmail}". Confirm receipt: "Thank you! Our team will reach out to you at ${combinedEmail} shortly." Do NOT ask for name or more information.]`;
+            leadContext = `\n\n[SYSTEM: We have the user's name "${combinedName}" but an INVALID email. Reason: ${validation.reason}. Thank them for sharing their name, but politely ask for a different email address.]`;
           }
-        } else {
-          leadContext = `\n\n[SYSTEM: The user provided an INVALID email. Reason: ${validation.reason}. Politely ask for a different email address.]`;
+        } else if (hasEmail && !hasName) {
+          // User provided email but no name yet
+          const validation = validateEmail(combinedEmail!);
+
+          if (validation.valid) {
+            const emailPrefix = combinedEmail!.split('@')[0].toLowerCase();
+            const genericPrefixes = ['info', 'contact', 'sales', 'support', 'admin', 'hello', 'hi', 'mail', 'email', 'office', 'team', 'enquiry', 'inquiry', 'help', 'service', 'noreply', 'no-reply'];
+            const potentialName = emailPrefix.replace(/[._-]/g, ' ').split(' ')[0].replace(/\d+/g, '');
+            const isGenericPrefix = genericPrefixes.includes(potentialName.toLowerCase());
+
+            if (potentialName && potentialName.length >= 2 && !isGenericPrefix) {
+              const capitalizedName = potentialName.charAt(0).toUpperCase() + potentialName.slice(1).toLowerCase();
+              // Save derived name to currentLeadInfo so it persists in conversation memory
+              currentLeadInfo.name = capitalizedName;
+              combinedName = capitalizedName;
+              leadContext = `\n\n[SYSTEM: The user provided a VALID email "${combinedEmail}". Their name appears to be "${capitalizedName}" (from email). Confirm receipt warmly: "Thank you, ${capitalizedName}! Our team will reach out to you at ${combinedEmail} shortly." Do NOT ask for more information.]`;
+            } else {
+              leadContext = `\n\n[SYSTEM: The user provided a VALID email "${combinedEmail}". Confirm receipt: "Thank you! Our team will reach out to you at ${combinedEmail} shortly." Do NOT ask for name or more information.]`;
+            }
+          } else {
+            leadContext = `\n\n[SYSTEM: The user provided an INVALID email. Reason: ${validation.reason}. Politely ask for a different email address.]`;
+          }
+        } else if (hasName && !hasEmail) {
+          // User provided name but no email yet
+          leadContext = `\n\n[SYSTEM: The user provided their name "${combinedName}" but no email yet. Acknowledge their name warmly and ask: "Nice to meet you, ${combinedName}! Could you also share your email so our team can follow up with you?"]`;
         }
-      } else if (hasName && !hasEmail) {
-        // User provided name but no email yet
-        leadContext = `\n\n[SYSTEM: The user provided their name "${combinedName}" but no email yet. Acknowledge their name warmly and ask: "Nice to meet you, ${combinedName}! Could you also share your email so our team can follow up with you?"]`;
       }
 
       // Add lead context to the message if we have any

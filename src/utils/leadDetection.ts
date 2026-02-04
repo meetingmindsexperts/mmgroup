@@ -140,7 +140,14 @@ export function extractName(text: string): string | null {
   for (const pattern of NAME_PATTERNS) {
     const match = text.match(pattern);
     if (match && match[1]) {
-      return match[1].trim();
+      const extractedName = match[1].trim();
+      // Validate that extracted name is not a common word
+      const nameWords = extractedName.toLowerCase().split(/\s+/);
+      const isCommonWord = nameWords.some((word) => NOT_NAMES.has(word));
+      if (!isCommonWord) {
+        return extractedName;
+      }
+      // Pattern matched but extracted a common word, continue to next pattern
     }
   }
 
