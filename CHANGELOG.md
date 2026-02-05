@@ -153,8 +153,8 @@ All notable changes to the MMGroup chatbot project.
 - [ ] Admin UI for content management
 
 ### Chat Features
-- [ ] Conversation history persistence (D1 database)
-- [ ] Multi-turn context awareness
+- [x] Conversation history persistence (KV storage with 24-hour TTL) ✅ v1.2.0
+- [x] Multi-turn context awareness (last 10 messages retained) ✅ v1.2.0
 - [ ] Suggested follow-up questions
 - [ ] File/image upload support
 - [ ] Voice input support
