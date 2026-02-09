@@ -17,7 +17,12 @@
       "Bash(brew install:*)",
       "Bash(npm install:*)",
       "Bash(npx supabase:*)",
-      "WebFetch(domain:www.meetingmindsgroup.com)"
+      "WebFetch(domain:www.meetingmindsgroup.com)",
+      "Bash(export PATH=\"/usr/local/bin:/opt/homebrew/bin:$PATH\")",
+      "Bash(npx tsx:*)",
+      "Bash(PATH=\"/usr/local/bin:/opt/homebrew/bin:$PATH\" /usr/bin/curl:*)",
+      "Bash(brew list:*)",
+      "Bash(PATH=\"/usr/local/bin:/opt/homebrew/bin:$PATH\" npm run deploy:*)"
     ]
   }
 }

@@ -70,8 +70,8 @@ const NAME_PATTERNS = [
   /(?:my name is|name is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
   // "Name: John Smith" or "Name - John"
   /\bname\s*[:\-]\s*([A-Za-z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+)?)/i,
-  // "I'm John Smith" or "I am John Smith" - require two-word name to avoid "I am interested"
-  /(?:i'm|i am)\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
+  // "I'm John Smith" or "I am John" - single or two-word name (NOT_NAMES filters false positives like "I am interested")
+  /(?:i'm|i am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
   // "this is John Smith"
   /this is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
   // "John Smith here" or "John Smith speaking"

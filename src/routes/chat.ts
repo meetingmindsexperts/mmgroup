@@ -145,6 +145,7 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
         leadFormEmail = combinedEmail || undefined;
       } else if (hasEmail && emailValidation && emailValidation.valid) {
         // Email is captured; stop asking and proceed normally.
+        leadContext = `\n\n[SYSTEM: The user's name is ${combinedName} and their email (${combinedEmail}) has already been captured. Do NOT ask for any contact information. Just answer their question normally and helpfully.]`;
         nextLeadCaptureInProgress = false;
       }
 
