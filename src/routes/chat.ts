@@ -124,7 +124,7 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
       const hasEmail = !!combinedEmail;
 
       if (!hasName) {
-        leadContext = `\n\n[SYSTEM: The user has not provided their name yet. Ask for their name FIRST before answering any questions. Do NOT answer their question yet — just ask for their name in a friendly way. Example: "Hi there! Before I help you, may I know your name?"]`;
+        leadContext = `\n\n[SYSTEM: The user has not provided their name yet. Ask for their name FIRST before answering any questions. Do NOT answer their question yet — just ask for their name in a friendly way. Example: "Hi there! I am MMG Assistant. Before I help you, may I know your name?"]`;
         nextLeadCaptureInProgress = true;
       } else if (nameJustProvided && !hasEmail) {
         // Greet by name and answer any pending question from earlier in the conversation.

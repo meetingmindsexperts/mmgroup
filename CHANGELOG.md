@@ -2,6 +2,23 @@
 
 All notable changes to the MMGroup chatbot project.
 
+## [1.2.1] - 2026-02-09
+
+### Improved
+
+- **Lead Capture Flow**
+  - Name is now ALWAYS asked first — questions are deferred until the user provides their name
+  - Once the user provides their name, any pending question from earlier in the conversation is answered politely using their name
+  - Removed special-case logic for greeting+question vs question-only first messages
+
+- **Widget Lead Form UX**
+  - Replaced the form-style lead capture (Name label, Email label, Send button) with a subtle inline approach
+  - Email collection now just changes the chat input placeholder to "Enter your email address..." — no separate form
+  - User types their email in the same chat input and presses Enter as usual
+  - Removed all `.mm-lead-form` CSS and form-building JS code
+
+---
+
 ## [1.2.0] - 2026-02-03
 
 ### Added

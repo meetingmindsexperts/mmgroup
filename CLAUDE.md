@@ -127,6 +127,13 @@ Add to any website (works on Webflow, WordPress, etc.):
 - Session persistence via localStorage
 - Typing indicator animation
 - Mobile responsive
+- Subtle inline email capture (chat input placeholder swap, no form UI)
+
+### Lead Capture Flow
+1. User sends first message → bot asks for name (does NOT answer questions yet)
+2. User provides name → bot greets by name and answers any pending question
+3. User asks next question → bot asks for email (input placeholder changes to "Enter your email address...")
+4. User provides valid email → lead saved, normal chat resumes
 
 ## Environment Configuration
 
