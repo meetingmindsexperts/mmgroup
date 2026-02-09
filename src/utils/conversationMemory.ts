@@ -14,6 +14,7 @@ interface ConversationData {
     email?: string;
     phone?: string;
   };
+  leadCaptureInProgress?: boolean;
   updatedAt: number;
 }
 
@@ -70,7 +71,8 @@ export async function addMessage(
   kv: KVNamespace,
   sessionId: string,
   message: ChatMessage,
-  leadInfo?: { name?: string; email?: string; phone?: string }
+  leadInfo?: { name?: string; email?: string; phone?: string },
+  leadCaptureInProgress?: boolean
 ): Promise<void> {
   const existing = await getConversation(kv, sessionId);
 
@@ -80,6 +82,10 @@ export async function addMessage(
       ...existing?.leadInfo,
       ...leadInfo,
     },
+    leadCaptureInProgress:
+      typeof leadCaptureInProgress === 'boolean'
+        ? leadCaptureInProgress
+        : existing?.leadCaptureInProgress,
     updatedAt: Date.now(),
   };
 

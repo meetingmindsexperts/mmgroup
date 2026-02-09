@@ -37,6 +37,12 @@ All notable changes to the MMGroup chatbot project.
   - Added `NOT_NAMES` set to exclude common words from name detection
   - Standalone name detection for short messages (1-3 words)
   - Generic email prefix detection (info@, contact@, etc.)
+- **Lead Capture UX**
+  - Replaced ambiguous single field with two inputs: name and email
+  - Widget now renders a dedicated name + email form when lead capture is triggered
+  - Lead form state persists during multi-turn capture to reduce ambiguity
+  - Added support for "Name:" form-style parsing in lead detection
+  - Chat API now returns a `leadForm` hint for widget UI rendering
 
 - **System Prompt** (`src/config.ts`)
   - Lead capture marked as HIGHEST PRIORITY

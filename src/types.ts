@@ -14,6 +14,11 @@ export interface ChatResponse {
   response: string;
   sessionId: string;
   sources?: string[];
+  leadForm?: {
+    show: boolean;
+    name?: string;
+    email?: string;
+  };
 }
 
 export interface IngestRequest {

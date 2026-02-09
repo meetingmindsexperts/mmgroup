@@ -68,6 +68,8 @@ const PHONE_REGEX = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{1,4}\)?[-.\s]?\d{1,4}[-.\s]?\d{
 const NAME_PATTERNS = [
   // "my name is John Smith" or "name is John Smith" - most explicit
   /(?:my name is|name is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+  // "Name: John Smith" or "Name - John"
+  /\bname\s*[:\-]\s*([A-Za-z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+)?)/i,
   // "I'm John Smith" or "I am John Smith" - require two-word name to avoid "I am interested"
   /(?:i'm|i am)\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
   // "this is John Smith"
