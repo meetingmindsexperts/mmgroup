@@ -254,45 +254,6 @@ function generateWidgetJs(
       transition: border-color 0.2s;
     }
     .mm-chat-input:focus { border-color: \${PRIMARY_COLOR}; }
-    .mm-lead-form {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      background: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 12px;
-      padding: 12px;
-    }
-    .mm-lead-form label {
-      font-size: 12px;
-      color: #475569;
-      font-weight: 600;
-    }
-    .mm-lead-form input {
-      padding: 10px 12px;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      font-size: 14px;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    .mm-lead-form input:focus { border-color: \${PRIMARY_COLOR}; }
-    .mm-lead-form button {
-      margin-top: 4px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: none;
-      background: \${PRIMARY_COLOR};
-      color: white;
-      font-weight: 600;
-      cursor: pointer;
-      transition: filter 0.2s;
-    }
-    .mm-lead-form button:hover { filter: brightness(0.9); }
-    .mm-lead-error {
-      font-size: 12px;
-      color: #b91c1c;
-    }
     .mm-chat-send {
       width: 44px;
       height: 44px;
@@ -375,7 +336,6 @@ function generateWidgetJs(
     const sendBtn = widget.querySelector('.mm-chat-send');
     const defaultPlaceholder = input.getAttribute('placeholder') || 'Type your message...';
     let leadFormActive = false;
-    let leadFormEl = null;
 
     function toggleChat() {
       isOpen = !isOpen;
@@ -384,9 +344,15 @@ function generateWidgetJs(
     }
 
     async function sendMessage(messageOverride) {
-      const message =
+      let message =
         typeof messageOverride === 'string' ? messageOverride.trim() : input.value.trim();
       if (!message) return;
+
+      // If lead form is active, format as email submission and reset
+      if (leadFormActive && typeof messageOverride !== 'string') {
+        message = 'Email: ' + message;
+        clearLeadForm();
+      }
 
       if (typeof messageOverride !== 'string') {
         input.value = '';
@@ -430,10 +396,8 @@ function generateWidgetJs(
         addMessage('assistant', 'Sorry, I couldn\\'t connect. Please check your internet connection.', false);
       }
 
-      if (!leadFormActive) {
-        sendBtn.disabled = false;
-        input.focus();
-      }
+      sendBtn.disabled = false;
+      input.focus();
     }
 
     function addMessage(role, content, format = true, save = true) {
@@ -483,84 +447,17 @@ function generateWidgetJs(
     }
 
     function clearLeadForm() {
-      if (leadFormEl) {
-        leadFormEl.remove();
-        leadFormEl = null;
-      }
       leadFormActive = false;
-      input.disabled = false;
+      input.type = 'text';
       input.placeholder = defaultPlaceholder;
-      sendBtn.disabled = false;
     }
 
     function showLeadForm(payload) {
       if (leadFormActive) return;
       leadFormActive = true;
-      input.disabled = true;
-      input.placeholder = 'Please use the form below...';
-      sendBtn.disabled = true;
-
-      leadFormEl = document.createElement('div');
-      leadFormEl.className = 'mm-chat-message assistant';
-
-      const formEl = document.createElement('form');
-      formEl.className = 'mm-lead-form';
-
-      const nameLabel = document.createElement('label');
-      nameLabel.textContent = 'Name';
-      const nameInput = document.createElement('input');
-      nameInput.type = 'text';
-      nameInput.placeholder = 'Your name';
-      if (payload && payload.name) {
-        nameInput.value = payload.name;
-      }
-
-      const emailLabel = document.createElement('label');
-      emailLabel.textContent = 'Email';
-      const emailInput = document.createElement('input');
-      emailInput.type = 'email';
-      emailInput.placeholder = 'you@company.com';
-      emailInput.required = true;
-      if (payload && payload.email) {
-        emailInput.value = payload.email;
-      }
-
-      const errorEl = document.createElement('div');
-      errorEl.className = 'mm-lead-error';
-
-      const submitBtn = document.createElement('button');
-      submitBtn.type = 'submit';
-      submitBtn.textContent = 'Send';
-
-      formEl.appendChild(nameLabel);
-      formEl.appendChild(nameInput);
-      formEl.appendChild(emailLabel);
-      formEl.appendChild(emailInput);
-      formEl.appendChild(errorEl);
-      formEl.appendChild(submitBtn);
-
-      formEl.addEventListener('submit', (event) => {
-        event.preventDefault();
-        errorEl.textContent = '';
-        const nameValue = nameInput.value.trim();
-        const emailValue = emailInput.value.trim();
-
-        if (!emailValue) {
-          errorEl.textContent = 'Please enter a valid email address.';
-          return;
-        }
-
-        clearLeadForm();
-        const formattedMessage = nameValue
-          ? \`Name: \${nameValue}\\nEmail: \${emailValue}\`
-          : \`Email: \${emailValue}\`;
-        sendMessage(formattedMessage);
-      });
-
-      leadFormEl.appendChild(formEl);
-      messagesEl.appendChild(leadFormEl);
-      scrollToBottom();
-      nameInput.focus();
+      input.type = 'email';
+      input.placeholder = 'Enter your email address...';
+      input.focus();
     }
 
     bubble.addEventListener('click', toggleChat);
