@@ -43,6 +43,8 @@ All notable changes to the MMGroup chatbot project.
   - Lead form state persists during multi-turn capture to reduce ambiguity
   - Added support for "Name:" form-style parsing in lead detection
   - Chat API now returns a `leadForm` hint for widget UI rendering
+  - Lead capture flow updated to ask name first, then email on subsequent requests
+  - First-message questions now get a brief answer followed by a name request
 
 - **System Prompt** (`src/config.ts`)
   - Lead capture marked as HIGHEST PRIORITY
