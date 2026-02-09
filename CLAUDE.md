@@ -37,6 +37,8 @@ mmgroup/
 │   ├── routes/
 │   │   ├── chat.ts           # /chat and /chat/stream endpoints
 │   │   ├── ingest.ts         # /ingest, /ingest/bulk, /stats endpoints
+│   │   ├── analytics.ts      # /analytics and /analytics/export endpoints
+│   │   ├── knowledgeGaps.ts  # Knowledge gap detection and /analytics/gaps endpoints
 │   │   └── widget.ts         # /widget.js embeddable chat widget
 │   └── utils/
 │       ├── cors.ts           # CORS handling for Webflow
@@ -75,6 +77,11 @@ wrangler secret put OPENAI_API_KEY
 | `/ingest` | POST | Ingest single document |
 | `/ingest/bulk` | POST | Ingest multiple documents at once |
 | `/stats` | GET | Vector store statistics |
+| `/analytics` | GET | Chat analytics dashboard |
+| `/analytics/export` | GET | Export chat logs as CSV |
+| `/analytics/gaps` | GET | Knowledge gaps (unanswered questions) |
+| `/analytics/gaps/summary` | GET | Knowledge gaps summary + top 5 |
+| `/analytics/gaps/:id/resolve` | PATCH | Mark a gap as resolved |
 | `/widget.js` | GET | Embeddable chat widget JavaScript |
 | `/health` | GET | Health check |
 
@@ -227,12 +234,42 @@ npm run deploy
 - Run scraper for one site at a time: `npm run scrape -- --site=mmg`
 - The scraper has built-in delays (500ms between pages, 2s between sites)
 
+## Knowledge Gap Detection
+
+The chatbot automatically detects questions it can't answer well and logs them for content improvement.
+
+**How it works:**
+- After each chat, if all RAG similarity scores are ≤ 0.3, the question is flagged as a knowledge gap
+- Greetings, short messages, contact info, and lead capture interactions are filtered out
+- Gaps are deduplicated by normalized question text (lowercase, stripped punctuation)
+- Occurrence count increments on repeat questions; up to 5 sample session IDs stored
+
+**Reviewing gaps:**
+```bash
+# List active gaps (sorted by occurrence)
+curl https://mmgroup.krishna-94f.workers.dev/analytics/gaps
+
+# Summary with top 5 most-asked unanswered questions
+curl https://mmgroup.krishna-94f.workers.dev/analytics/gaps/summary
+
+# Mark a gap as resolved after adding content
+curl -X PATCH https://mmgroup.krishna-94f.workers.dev/analytics/gaps/1/resolve \
+  -H "Content-Type: application/json" \
+  -d '{"note": "Added pricing page content"}'
+```
+
+**D1 Schema:** `knowledge_gaps` table in `schema.sql` (migrated via `wrangler d1 execute`)
+
 ## Key Files to Know
 
 | File | Purpose |
 |------|---------|
 | [src/config.ts](src/config.ts) | System prompt, RAG settings |
-| [src/routes/chat.ts](src/routes/chat.ts) | RAG chat logic |
+| [src/routes/chat.ts](src/routes/chat.ts) | RAG chat logic, lead capture, gap detection |
+| [src/routes/analytics.ts](src/routes/analytics.ts) | Chat analytics dashboard + CSV export |
+| [src/routes/knowledgeGaps.ts](src/routes/knowledgeGaps.ts) | Knowledge gap detection and endpoints |
 | [src/routes/widget.ts](src/routes/widget.ts) | Embeddable widget HTML/CSS/JS |
+| [src/utils/conversationMemory.ts](src/utils/conversationMemory.ts) | Session-based conversation history in KV |
+| [src/utils/leadDetection.ts](src/utils/leadDetection.ts) | Name/email/phone extraction |
 | [scripts/scrape-website.ts](scripts/scrape-website.ts) | Multi-site scraper |
 | [wrangler.jsonc](wrangler.jsonc) | Cloudflare config, KV bindings |

@@ -6,6 +6,7 @@ import { createVectorStoreProvider } from '../providers/vectorstore';
 import { createLeadsProvider, isLeadCaptureEnabled } from '../providers/leads';
 import { extractLeadInfo, validateEmail } from '../utils/leadDetection';
 import { logChat } from './analytics';
+import { isKnowledgeGap, logKnowledgeGap } from './knowledgeGaps';
 import {
   getConversation,
   addMessage,
@@ -14,7 +15,7 @@ import {
 } from '../utils/conversationMemory';
 
 
-export async function handleChat(request: Request, env: Env): Promise<Response> {
+export async function handleChat(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   const startTime = Date.now();
 
   // Parse JSON body with specific error handling
@@ -205,17 +206,31 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
         : undefined,
     };
 
-    // Log chat for analytics (non-blocking)
+    // Log chat for analytics and detect knowledge gaps (background D1 writes)
     const responseTime = Date.now() - startTime;
-    logChat(env, {
-      session_id: sessionId,
-      message: userMessage,
-      response: response,
-      response_time_ms: responseTime,
-      context_chunks: searchResults.filter((r) => r.score > 0.3).length,
-      origin: request.headers.get('origin'),
-      user_agent: request.headers.get('user-agent'),
-    });
+    const backgroundWork = (async () => {
+      await logChat(env, {
+        session_id: sessionId,
+        message: userMessage,
+        response: response,
+        response_time_ms: responseTime,
+        context_chunks: searchResults.filter((r) => r.score > 0.3).length,
+        origin: request.headers.get('origin'),
+        user_agent: request.headers.get('user-agent'),
+      });
+
+      // Log knowledge gap if RAG couldn't find relevant content
+      if (isKnowledgeGap(userMessage, searchResults, leadCaptureInProgress)) {
+        const bestScore = searchResults.length > 0
+          ? Math.max(...searchResults.map((r) => r.score))
+          : 0;
+        await logKnowledgeGap(env, { question: userMessage, bestScore, sessionId });
+      }
+    })();
+
+    if (ctx) {
+      ctx.waitUntil(backgroundWork);
+    }
 
     return Response.json(result);
   } catch (error) {

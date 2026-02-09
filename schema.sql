@@ -25,3 +25,22 @@ CREATE TABLE IF NOT EXISTS daily_stats (
   avg_response_time_ms REAL DEFAULT 0,
   updated_at TEXT DEFAULT (datetime('now'))
 );
+
+-- Knowledge gaps table - tracks questions the chatbot can't answer well
+CREATE TABLE IF NOT EXISTS knowledge_gaps (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  question TEXT NOT NULL,
+  question_normalized TEXT NOT NULL,
+  best_score REAL DEFAULT 0,
+  occurrence_count INTEGER DEFAULT 1,
+  first_seen_at TEXT DEFAULT (datetime('now')),
+  last_seen_at TEXT DEFAULT (datetime('now')),
+  sample_sessions TEXT,
+  status TEXT DEFAULT 'active' CHECK(status IN ('active', 'resolved')),
+  resolved_at TEXT,
+  resolution_note TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_gaps_normalized ON knowledge_gaps(question_normalized);
+CREATE INDEX IF NOT EXISTS idx_knowledge_gaps_status ON knowledge_gaps(status);
+CREATE INDEX IF NOT EXISTS idx_knowledge_gaps_occurrence ON knowledge_gaps(occurrence_count DESC);

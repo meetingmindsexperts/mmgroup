@@ -10,6 +10,9 @@
  *   DELETE /clear          - Clear all vectors from store
  *   GET    /analytics      - Chat analytics dashboard
  *   GET    /analytics/export - Export chat logs as CSV
+ *   GET    /analytics/gaps  - Knowledge gaps (unanswered questions)
+ *   GET    /analytics/gaps/summary - Knowledge gaps summary
+ *   PATCH  /analytics/gaps/:id/resolve - Mark a gap as resolved
  *   GET    /health         - Health check
  *   GET    /widget.js      - Embeddable chat widget
  */
@@ -19,10 +22,11 @@ import { handleChat, handleChatStream } from './routes/chat';
 import { handleIngest, handleBulkIngest, handleStats, handleClear } from './routes/ingest';
 import { handleWidget } from './routes/widget';
 import { handleAnalytics, handleAnalyticsExport } from './routes/analytics';
+import { handleGapsAnalytics, handleGapsSummary, handleResolveGap } from './routes/knowledgeGaps';
 import { handleCors, addCorsHeaders } from './utils/cors';
 
 export default {
-  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
     const allowedOrigin = env.ALLOWED_ORIGIN || 'https://meetingmindsgroup.com';
@@ -45,7 +49,7 @@ export default {
 
         // Chat endpoints
         case path === '/chat' && request.method === 'POST':
-          response = await handleChat(request, env);
+          response = await handleChat(request, env, ctx);
           break;
 
         case path === '/chat/stream' && request.method === 'POST':
@@ -70,6 +74,21 @@ export default {
         case path === '/clear' && request.method === 'DELETE':
           response = await handleClear(request, env);
           break;
+
+        // Knowledge gap endpoints (before /analytics to match longer paths first)
+        case path === '/analytics/gaps/summary' && request.method === 'GET':
+          response = await handleGapsSummary(request, env);
+          break;
+
+        case path === '/analytics/gaps' && request.method === 'GET':
+          response = await handleGapsAnalytics(request, env);
+          break;
+
+        case path.startsWith('/analytics/gaps/') && path.endsWith('/resolve') && request.method === 'PATCH': {
+          const gapId = parseInt(path.split('/')[3], 10);
+          response = await handleResolveGap(request, env, gapId);
+          break;
+        }
 
         // Analytics endpoints
         case path === '/analytics' && request.method === 'GET':

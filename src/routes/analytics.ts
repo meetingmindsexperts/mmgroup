@@ -95,6 +95,14 @@ export async function handleAnalytics(request: Request, env: Env): Promise<Respo
        LIMIT 20`
     ).all();
 
+    // Get knowledge gap summary
+    const gapSummary = await env.ANALYTICS_DB.prepare(
+      `SELECT
+        COUNT(CASE WHEN status = 'active' THEN 1 END) as active_gaps,
+        SUM(CASE WHEN status = 'active' THEN occurrence_count ELSE 0 END) as total_gap_occurrences
+       FROM knowledge_gaps`
+    ).first();
+
     return Response.json({
       period: `${days} days`,
       summary: summaryResult || {
@@ -102,6 +110,7 @@ export async function handleAnalytics(request: Request, env: Env): Promise<Respo
         unique_sessions: 0,
         avg_response_time: 0,
       },
+      knowledgeGaps: gapSummary || { active_gaps: 0, total_gap_occurrences: 0 },
       daily: dailyResult.results || [],
       topQuestions: topQuestionsResult.results || [],
       recentChats: recentResult.results || [],

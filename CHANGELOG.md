@@ -2,6 +2,27 @@
 
 All notable changes to the MMGroup chatbot project.
 
+## [1.3.0] - 2026-02-09
+
+### Added
+
+- **Knowledge Gap Detection**
+  - Automatically detects questions the chatbot can't answer well (all RAG scores ≤ 0.3)
+  - Logs gaps to D1 `knowledge_gaps` table with deduplication by normalized question text
+  - Filters noise: greetings, short messages (<15 chars), contact info, and lead capture interactions are excluded
+  - Tracks occurrence count, best similarity score, and up to 5 sample session IDs per gap
+  - New API endpoints:
+    - `GET /analytics/gaps?status=active&limit=50` — list knowledge gaps
+    - `GET /analytics/gaps/summary` — gap counts and top 5 most-asked unanswered questions
+    - `PATCH /analytics/gaps/:id/resolve` — mark a gap as resolved with optional note
+  - Gap summary included in main `/analytics` dashboard response
+
+### Fixed
+
+- **D1 Analytics Writes** — `logChat()` and `logKnowledgeGap()` now use `ctx.waitUntil()` to ensure background D1 writes complete before the Worker terminates (previously fire-and-forget promises were lost)
+
+---
+
 ## [1.2.1] - 2026-02-09
 
 ### Improved
@@ -194,7 +215,8 @@ All notable changes to the MMGroup chatbot project.
 ### Infrastructure
 - [ ] Upgrade to Vectorize for better search performance
 - [ ] Rate limiting per session/IP
-- [ ] Analytics dashboard
+- [x] Analytics dashboard ✅ v1.1.0
+- [x] Knowledge gap detection ✅ v1.3.0
 - [ ] Error tracking integration
 - [ ] A/B testing for system prompts
 
