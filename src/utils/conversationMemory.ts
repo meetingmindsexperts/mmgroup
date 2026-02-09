@@ -76,12 +76,16 @@ export async function addMessage(
 ): Promise<void> {
   const existing = await getConversation(kv, sessionId);
 
+  // Only update lead info fields that are actually defined (non-undefined)
+  // to prevent overwriting previously captured values with undefined
+  const mergedLeadInfo = { ...existing?.leadInfo };
+  if (leadInfo?.name) mergedLeadInfo.name = leadInfo.name;
+  if (leadInfo?.email) mergedLeadInfo.email = leadInfo.email;
+  if (leadInfo?.phone) mergedLeadInfo.phone = leadInfo.phone;
+
   const updatedData: ConversationData = {
     messages: [...(existing?.messages || []), message],
-    leadInfo: {
-      ...existing?.leadInfo,
-      ...leadInfo,
-    },
+    leadInfo: mergedLeadInfo,
     leadCaptureInProgress:
       typeof leadCaptureInProgress === 'boolean'
         ? leadCaptureInProgress
