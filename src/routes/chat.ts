@@ -13,8 +13,6 @@ import {
   getAccumulatedLeadInfo,
 } from '../utils/conversationMemory';
 
-const GREETING_ONLY_PATTERN = /^(?:\s*(hi|hello|hey|hiya|howdy|good\s+(morning|afternoon|evening))[\s!.?,]*)$/i;
-const QUESTION_PATTERN = /(\?|^(?:what|why|how|when|where|who|whom|which|can|could|would|should|do|does|did|is|are|am|will|may)\b)/i;
 
 export async function handleChat(request: Request, env: Env): Promise<Response> {
   const startTime = Date.now();
@@ -126,17 +124,11 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
       const hasEmail = !!combinedEmail;
 
       if (!hasName) {
-        const isGreetingOnly = GREETING_ONLY_PATTERN.test(userMessage);
-        const isQuestion = QUESTION_PATTERN.test(userMessage);
-        if (!isGreetingOnly && isQuestion) {
-          leadContext = `\n\n[SYSTEM: The user asked a question. Answer it briefly, then ask for their name. Keep it friendly and concise.]`;
-        } else {
-          leadContext = `\n\n[SYSTEM: Ask for the user's name before answering their request. Keep it brief and friendly, and do NOT answer their question yet.]`;
-        }
+        leadContext = `\n\n[SYSTEM: The user has not provided their name yet. Ask for their name FIRST before answering any questions. Do NOT answer their question yet — just ask for their name in a friendly way. Example: "Hi there! Before I help you, may I know your name?"]`;
         nextLeadCaptureInProgress = true;
       } else if (nameJustProvided && !hasEmail) {
-        // Greet by name, but wait until the next request to ask for email.
-        leadContext = `\n\n[SYSTEM: Greet the user by name ("Hi ${combinedName}!"). Do NOT ask for their email yet. Invite them to continue with their request.]`;
+        // Greet by name and answer any pending question from earlier in the conversation.
+        leadContext = `\n\n[SYSTEM: The user just provided their name. Greet them warmly by name ("Hi ${combinedName}!"). If the user asked a question earlier in the conversation that was not yet answered, answer it now politely using their name. Do NOT ask for their email yet.]`;
         nextLeadCaptureInProgress = true;
       } else if (hasEmail && emailValidation && !emailValidation.valid) {
         leadContext = `\n\n[SYSTEM: The user provided an INVALID email. Reason: ${emailValidation.reason}. Ask them for a different email address before answering.]`;
